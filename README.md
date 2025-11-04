@@ -93,7 +93,7 @@ If you’ve activated the environment manually (see 2b):
 python3 {script-name}.py
 ```
 
-## (dev) Connect Notebooks to the uv project's virtual environment
+## 4. (dev) Connect Notebooks to the uv project's virtual environment
 
 - NOTE: the required ipykernel dependency is already loaded in this project via `uv add --dev ipykernel`
 - Create a new jupyter notebook inside `ceo-chatbot/notebooks/`
