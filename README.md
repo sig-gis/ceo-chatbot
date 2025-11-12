@@ -118,7 +118,7 @@ If your code modifications require updates to the dependencies... (see [Managing
 
 Note: `.venv` is ignored; it is generated locally based on `pyproject.toml` and `uv.lock`
 
-### B. (dev) Connect Notebooks to the uv project's virtual environment
+### C. (dev) Connect Notebooks to the uv project's virtual environment
 
 *NOTE: the required ipykernel and uv dependencies to follow the steps below are already loaded in this project via `uv add --dev ipykernel uv`*
 
