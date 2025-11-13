@@ -16,7 +16,7 @@ ceo-chatbot/
 │
 ├── src/                      # Source code (modules and utilities imported by scripts) and scripts
 │
-├── test/                     # Unit and integration tests
+├── tests/                     # Unit and integration tests
 │
 ├── .gitignore                
 ├── .python-version           # Python version used by uv environment manager
