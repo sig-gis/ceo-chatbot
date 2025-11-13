@@ -14,9 +14,9 @@ ceo-chatbot/
 │
 ├── notebooks/                # Jupyter notebooks for development, prototyping, demos
 │
-├── scripts/                  # Python scripts for automation, orchestration, and deployment
+├── src/                      # Source code (modules and utilities imported by scripts) and scripts
 │
-├── src/                      # Source code (modules and utilities imported by scripts)
+├── test/                     # Unit and integration tests
 │
 ├── .gitignore                
 ├── .python-version           # Python version used by uv environment manager
