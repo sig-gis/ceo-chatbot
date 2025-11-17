@@ -1,0 +1,4 @@
+embedding_model_name: "thenlper/gte-small"
+reader_model_name: "HuggingFaceH4/zephyr-7b-beta"
+vectorstore_path: "data/vectorstores/huggingface_docs_faiss"
+prompt_file: "conf/base/prompts.yml"
