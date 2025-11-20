@@ -1,9 +1,21 @@
-from typing import List, Optional
+from typing import List
+from pathlib import Path
 from langchain_core.documents import Document as LangchainDocument
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from transformers import AutoTokenizer
+from ceo_chatbot.config import load_rag_config
 
-MARKDOWN_SEPARATORS = [
+
+def split_documents(
+    knowledge_base: List[LangchainDocument],
+    chunk_size: int = 512,
+    config_path: str | Path = "conf/base/rag_config.yml"
+) -> List[LangchainDocument]:
+    """
+    Split documents into chunks of maximum size `chunk_size` tokens and return a list of documents.
+    Removes duplicate chunks based on text content.
+    """
+    MARKDOWN_SEPARATORS = [
     "\n#{1,6} ",
     "```\n",
     "\n\\*\\*\\*+\n",
@@ -13,21 +25,9 @@ MARKDOWN_SEPARATORS = [
     "\n",
     " ",
     "",
-]
-
-DEFAULT_EMBEDDING_MODEL_NAME = "thenlper/gte-small"
-
-
-def split_documents(
-    knowledge_base: List[LangchainDocument],
-    chunk_size: int = 512,
-    tokenizer_name: Optional[str] = DEFAULT_EMBEDDING_MODEL_NAME,
-) -> List[LangchainDocument]:
-    """
-    Split documents into chunks of maximum size `chunk_size` tokens and return a list of documents.
-    Removes duplicate chunks based on text content.
-    """
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+    ]
+    config = load_rag_config(config_path)
+    tokenizer = AutoTokenizer.from_pretrained(config.embedding_model_name)
     text_splitter = RecursiveCharacterTextSplitter.from_huggingface_tokenizer(
         tokenizer,
         chunk_size=chunk_size,
