@@ -19,7 +19,7 @@ st.set_page_config(page_title="Demo RAG Chatbot", page_icon="💬", layout="wide
 st.title("Demo RAG Chatbot")
 
 # Initialize RAG service
-with st.spinner("Loading RAG pipeline (docs + model)..."):
+with st.spinner("Loading RAG pipeline..."):
     rag = get_rag_service()
 
 # Session state for messages
