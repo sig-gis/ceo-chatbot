@@ -1,3 +1,10 @@
+# Contributing to `ceo-chatbot`
+
+Thanks for helping to improve `ceo-chatbot`! 🎉
+
+If you have an idea or encounter a bug, please open an Issue. To contribute code and new features, submit a pull request.
+
+
 # Developing with `uv`
 
 ### Run scripts with `uv`
