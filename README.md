@@ -97,6 +97,19 @@ uv pip install -e .
 
 For local development, the knowledge corpus must be set up one time.
 
+If using a gated model such as [google/embeddinggemma-300m](https://huggingface.co/google/embeddinggemma-300m), 
+
+1. Request access to the model on its Hugging Face model page (access is granted instantly)
+2. Generate an access token: Profile > Settings > Access Tokens > + Create new token > Token type Read > Create token
+3. Run the following command in your terminal (may need to install `huggingface-cli`)
+
+```{bash}
+huggingface-cli login
+
+```
+
+Build the vector DB:
+
 ```{bash}
 uv run scripts/build_index.py
 ```
