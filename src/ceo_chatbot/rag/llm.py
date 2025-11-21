@@ -11,7 +11,7 @@ def get_reader_llm(
     model_name: str = "HuggingFaceH4/zephyr-7b-beta",
 ):
     """
-    Build a Zephyr text-generation pipeline with 4-bit quantization on GPU.
+    Build an LLM text-generation pipeline with 4-bit quantization on GPU.
     """
     bnb_config = BitsAndBytesConfig(
         load_in_4bit=True,
