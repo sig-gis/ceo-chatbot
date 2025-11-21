@@ -30,24 +30,25 @@ def build_faiss_index(
 # raw_docs = <replace load_hf_docs() with load CEO docs logic>
 def build_and_save_index(
     output_dir: Path,
+    config_path: str | Path = "conf/base/rag_config.yml"
 ) -> None:
     """
     Full ingest pipeline:
-      - load HF docs
+      - load docs
       - chunk
       - embed and build FAISS
       - save index to disk
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-
+    config = load_rag_config(config_path)
     # load docs
     raw_docs = load_hf_docs(dataset_name="m-ric/huggingface_doc", split="train")
 
     # chunk
     docs_processed = split_documents(
         knowledge_base=raw_docs,
-        chunk_size=512
+        chunk_size=config.chunk_size
     )
 
     # build index

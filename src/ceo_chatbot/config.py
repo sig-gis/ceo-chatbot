@@ -15,6 +15,7 @@ def _load_yaml(path: str | Path) -> Dict[str, Any]:
 @dataclass
 class RAGConfig:
     embedding_model_name: str
+    chunk_size: int
     reader_model_name: str
     vectorstore_path: Path
     prompt_file: Path
