@@ -101,10 +101,10 @@ If using a gated model such as [google/embeddinggemma-300m](https://huggingface.
 
 1. Request access to the model on its Hugging Face model page (access is granted instantly)
 2. Generate an access token: Profile > Settings > Access Tokens > + Create new token > Token type Read > Create token
-3. Run the following command in your terminal (may need to install `huggingface-cli`)
+3. Run the following `hf` cli command in your terminal and paste your HF access token when prompted
 
 ```{bash}
-huggingface-cli login
+uv run hf auth login
 
 ```
 
