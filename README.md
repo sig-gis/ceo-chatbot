@@ -108,6 +108,12 @@ uv run hf auth login
 
 ```
 
+Run CEO docs extraction pipeline: 
+
+```{bash}
+uv run scripts/extract_docs.py
+```
+
 Build the vector DB:
 
 ```{bash}
