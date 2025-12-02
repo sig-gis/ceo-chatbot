@@ -1,0 +1,9 @@
+github:
+  repo_url: "https://github.com/openforis/collect-earth-online-doc.git"
+  ref: "main"
+  path: "docs/source"
+
+gcs:
+  project_id: "collect-earth-online"
+  bucket_name: "rag-chatbot-dev"
+  prefix: "collect-earth-online-doc/docs/source"

@@ -1,3 +1,5 @@
+import os
+import re
 import yaml
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,11 +22,20 @@ class RAGConfig:
     vectorstore_path: Path
     prompt_file: Path
 
+@dataclass
+class DocumentExtractionConfig:
+    github_repo_url: str
+    gcs_project_id: str
+    gcs_bucket_name: str
+    github_ref: str = "main"
+    github_path: str = ""
+    gcs_prefix: str = ""
+
 def load_rag_config(
     base_path: str | Path = PROJECT_ROOT / "conf/base/rag_config.yml",
 ) -> RAGConfig:
     """
-    Load the RAG configuration from YAML to dataclass RAGConfig to configure pipeline. 
+    Load the RAG configuration from YAML to dataclass RAGConfig to configure pipeline.
 
     - base_path: Path(conf/base/rag_config.yml)
     """
@@ -32,6 +43,30 @@ def load_rag_config(
     base_cfg = _load_yaml(base_path)
 
     return RAGConfig(**base_cfg)
+
+def load_document_extraction_config(
+    config_path: str | Path = PROJECT_ROOT / "conf/base/extract_docs_config.yml",
+) -> DocumentExtractionConfig:
+    """
+    Load the document extraction configuration from YAML to dataclass DocumentExtractionConfig.
+
+    - config_path: Path to the document extraction configuration file
+    """
+    config_path = Path(config_path)
+    cfg = _load_yaml(config_path)
+
+    # Extract nested values with defaults
+    github = cfg.get("github", {})
+    gcs = cfg.get("gcs", {})
+
+    return DocumentExtractionConfig(
+        github_repo_url=github["repo_url"],
+        github_ref=github.get("ref", "main"),
+        github_path=github.get("path", ""),
+        gcs_project_id=gcs["project_id"],
+        gcs_bucket_name=gcs["bucket_name"],
+        gcs_prefix=gcs.get("prefix", ""),
+    )
 
 def load_prompt_template(
     prompt_file: str | Path,
