@@ -105,10 +105,17 @@ If using a gated model such as [google/embeddinggemma-300m](https://huggingface.
 
 ```{bash}
 uv run hf auth login
-
 ```
 
-Run CEO docs extraction pipeline: 
+Authenticate GCloud for access to the GCS bucket specified in `conf/base/extract_docs_config.yml`
+
+```{bash}
+gcloud auth login
+```
+
+To initially set up the CEO docs corpus or to manually re-upload updates to the GCS bucket specified in `conf/base/extract_docs_config.yml`, run the CEO docs extraction pipeline. 
+NOTE: this step is not required to reproduce the chatbot once the corpus exists in GCS. If the corpus already exists in GCS, skip to *Build the vector DB* below. 
+ 
 
 ```{bash}
 uv run scripts/extract_docs.py
@@ -120,7 +127,7 @@ Build the vector DB:
 uv run scripts/build_index.py
 ```
 
-Stay tuned! A planned future version will automate building the vector DB.
+Stay tuned! A planned future version will automate uploading the corpus to GCS and building the vector DB.
 
 ## 5. Run a demo chat UI
 
