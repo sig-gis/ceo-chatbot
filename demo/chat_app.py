@@ -38,11 +38,17 @@ if prompt := st.chat_input("Ask a question about the docs..."):
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # 2. Get RAG answer
+    # 2. Get RAG answer with conversation history
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
+            # Prepare conversation history (exclude current user message)
+            history = [
+                {"role": m["role"], "content": m["content"]}
+                for m in st.session_state.messages[:-1]
+            ]
             answer_stream,_ = rag.stream_answer(
                 question=prompt,
+                history=history,
                 num_retrieved_docs=30,
                 num_docs_final=5,
             )

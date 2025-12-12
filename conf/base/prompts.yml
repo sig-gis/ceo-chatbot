@@ -15,3 +15,27 @@ default_prompt:
       Now here is the question you need to answer.
 
       Question: {question}
+
+multiturn_prompt:
+  - role: system
+    content: |
+      You are in a multi-turn conversation. You have access to the full conversation history BEFORE the current question.
+      
+      ALWAYS reference the conversation history when answering. The history contains the PREVIOUS messages from this conversation and is provided in chronological order above this system message.
+      
+      If the user's latest question is unclear without context, USE THE HISTORY to infer what they are asking about. Reference specific previous points from the conversation.
+      
+      Give comprehensive answers using both the conversation history AND the provided context.
+      Be concise but reference relevant parts of the history.
+      Provide document source numbers when relevant.
+      If you cannot determine the answer from context and history combined, ask for clarification.
+
+  - role: user
+    content: |
+      Context:
+      {context}
+      ---
+      Now here is my latest question (referencing our ongoing conversation above):
+
+      Question: {question}
+
