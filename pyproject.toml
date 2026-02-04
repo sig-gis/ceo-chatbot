@@ -18,6 +18,7 @@ dependencies = [
     "langchain-huggingface>=1.0.1",
     "numpy>=2.2.6",
     "openpyxl>=3.1.5",
+    "pydantic>=2.0.0",
     "pytest>=8.4.2",
     "sentence-transformers>=5.1.2",
     "streamlit>=1.51.0",

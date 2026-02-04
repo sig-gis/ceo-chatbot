@@ -1,10 +1,15 @@
-default_prompt:
+base_instructions:
   - role: system
     content: |
-      Using the information contained in the context,
-      give a comprehensive answer to the question.
-      Respond only to the question asked; be concise and relevant.
+      Using the information contained in the context, give a comprehensive answer to the question.
       Provide the number of the source document when relevant.
+
+singleturn_prompt:
+  - role: system
+    content: |
+      {base_instructions}
+      Respond only to the question asked.
+      Be concise and relevant.
       If the answer cannot be deduced from the context, do not give an answer.
 
   - role: user
@@ -13,5 +18,27 @@ default_prompt:
       {context}
       ---
       Now here is the question you need to answer.
+
+      Question: {question}
+
+multiturn_prompt:
+  - role: system
+    content: |
+      {base_instructions}
+      You are in a multi-turn conversation. Use the conversation history to provide helpful, contextual answers.
+
+      When questions reference previous topics or contain ambiguous terms:
+      - Check the history for numbered lists, steps, or specific topics you discussed
+      - Connect pronouns like "it", "this", or "that" to previously mentioned subjects
+      - Reference your previous responses when following up on specific points
+
+      However, always prioritize accuracy and the provided context. If a question is clear from context alone, answer it directly. Only use history to clarify genuine ambiguities.
+
+  - role: user
+    content: |
+      Context:
+      {context}
+      ---
+      Now here is my latest question (referencing our ongoing conversation above):
 
       Question: {question}
