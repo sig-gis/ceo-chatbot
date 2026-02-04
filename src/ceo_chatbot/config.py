@@ -1,9 +1,9 @@
 import os
 import re
 import yaml
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List
+from pydantic import BaseModel, Field
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -14,17 +14,15 @@ def _load_yaml(path: str | Path) -> Dict[str, Any]:
     with path.open("r") as f:
         return yaml.safe_load(f) or {}
     
-@dataclass
-class RAGConfig:
+class RAGConfig(BaseModel):
     embedding_model_name: str
-    chunk_size: int
+    chunk_size: int = Field(gt=0, description="Chunk size must be positive")
     reader_model_name: str
     vectorstore_path: Path
     prompt_file: Path
 
-@dataclass
-class DocumentExtractionConfig:
-    github_repo_url: str
+class DocumentExtractionConfig(BaseModel):
+    github_repo_url: str = Field(pattern=r'^https?://', description="Must be a valid HTTP/HTTPS URL")
     gcs_project_id: str
     gcs_bucket_name: str
     github_ref: str = "main"
