@@ -25,7 +25,8 @@ class RagService:
     def __init__(
             self,
             config_path: str | Path = "conf/base/rag_config.yml",
-            retriever: Callable[[str, int], List[LangchainDocument]] | None = None
+            retriever: Callable[[str, int], List[LangchainDocument]] | None = None,
+            skip_interpretation: bool = False
     ) -> None:
         """
         Initializes the RagService with configuration, model, and retriever setup.
@@ -38,6 +39,7 @@ class RagService:
         Args:
             config_path (str | Path): Path to the RAG configuration YAML file containing model and data paths.
             retriever (Callable[[str, int], List[LangchainDocument]] | None): Optional retriever function for dependency injection in tests.
+            skip_interpretation (bool): If True, skips question interpretation for testing (uses raw questions). Defaults to False.
 
         Returns:
             None
@@ -45,6 +47,7 @@ class RagService:
         Notes:
             Requires Hugging Face model configs; may be resource-intensive for large models.
             Use retriever injection for unit testing without FAISS index loading.
+            skip_interpretation is intended for testing scenarios only.
         """
         
         # Load config
@@ -85,6 +88,9 @@ class RagService:
         self.multiturn_messages = load_prompt_template(
             prompt_file=self.config.prompt_file, prompt_key='multiturn_prompt'
         )
+
+        # Store testing override settings
+        self.skip_interpretation = skip_interpretation
 
         # Initialize question interpreter for two-phase reasoning
         self.interpreter = QuestionInterpreter(self.llm, self.tokenizer)
@@ -187,6 +193,218 @@ class RagService:
         )
         return context
 
+    def _interpret_question_phase1(
+        self,
+        question: str,
+        history: List[Dict[str, str]],
+        skip_interpretation: bool
+    ) -> Interpretation:
+        """
+        Phase 1: Interpret question intent and determine response strategy.
+        
+        details:
+            Consolidates the interpretation logic that was duplicated between
+            answer() and stream_answer() methods. Uses the question interpreter
+            to analyze intent and determine optimal response strategy.
+
+        Args:
+            question (str): The current user question string to interpret.
+            history (List[Dict[str, str]]): List of previous conversation messages with 'role' and 'content'.
+            skip_interpretation (bool): If True, skips interpretation for testing (uses raw question).
+
+        Returns:
+            Interpretation: Structured analysis of question intent and strategy.
+        """
+        # Phase 1: Interpret question and determine strategy (unless skipped for testing)
+        if skip_interpretation:
+            # For testing: skip interpretation and use raw question with retrieval
+            interpretation = Interpretation(
+                original_question=question,
+                interpreted_question=question,
+                interpreted_successfully=False,  # Not interpreted
+                interpretation_confidence=0.0,   # No interpretation performed
+                routing_confidence=1.0,          # High confidence in default routing
+                needs_retrieval=True,            # Default to retrieval for testing
+                search_query=question,
+                context_used="standalone",
+                reasoning="Interpretation skipped - will answer raw question with retrieval"
+            )
+        else:
+            # Normal interpretation
+            interpretation = self.interpreter.interpret_question(question, history)
+
+        return interpretation
+
+    def _build_prompt_and_retrieve(
+        self,
+        interpretation: Interpretation,
+        history: List[Dict[str, str]],
+        num_retrieved_docs: int,
+        num_docs_final: int
+    ) -> Tuple[str, List[LangchainDocument], str, List[Dict[str, str]]]:
+        """
+        Build prompt and retrieve documents for retrieval-based responses.
+        
+        details:
+            Consolidates the prompt building and retrieval logic that was duplicated
+            across all four helper methods (_answer_with_retrieval, _stream_with_retrieval,
+            _answer_from_history, _stream_from_history). This function handles document
+            retrieval, context building, and prompt construction.
+
+        Args:
+            interpretation (Interpretation): Question interpretation results containing search query.
+            history (List[Dict[str, str]]): List of previous conversation messages with 'role' and 'content'.
+            num_retrieved_docs (int): Number of documents to retrieve initially from vector store.
+            num_docs_final (int): Number of top documents to include in the final context.
+
+        Returns:
+            Tuple[str, List[LangchainDocument], str, List[Dict[str, str]]]: 
+                - prompt: The formatted prompt string
+                - docs: Retrieved documents
+                - context: Built context string  
+                - truncated_history: History after truncation
+        """
+        # Use interpreted search query for better retrieval
+        search_query = interpretation.search_query or interpretation.interpreted_question
+
+        # 1. Retrieve
+        docs = self.retriever(search_query, k=num_retrieved_docs)
+        docs = docs[:num_docs_final]
+
+        # 2. Build context
+        context = self._build_context(docs)
+
+        # Construct system content from base instructions + appropriate extensions
+        base_content = self.base_instructions[0]["content"]  # Extract content from message
+        if history:
+            # Add multiturn conversation extensions
+            system_content = base_content + "\n\n" + self.multiturn_messages[0]["content"]
+        else:
+            # Add single-turn specific extensions
+            system_content = base_content + "\n\n" + self.singleturn_messages[0]["content"]
+        base_system = {"role": "system", "content": system_content}
+
+        # 3. Truncate history if necessary to fit context limit
+        truncated_history = self._truncate_history(history, context, search_query, base_system)
+
+        # 4. Build conversational message list
+        # Use multiturn user template if history exists, otherwise singleturn
+        if truncated_history:
+            user_content = self.multiturn_messages[1]["content"].format(context=context, question=search_query)
+        else:
+            user_content = self.singleturn_messages[1]["content"].format(context=context, question=search_query)
+        messages = [base_system] + truncated_history + [
+            {"role": "user", "content": user_content}
+        ]
+
+        # 5. Apply chat template to get final prompt
+        prompt = self.tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+        return prompt, docs, context, truncated_history
+
+    def _build_prompt_from_history(
+        self,
+        interpretation: Interpretation,
+        history: List[Dict[str, str]]
+    ) -> str:
+        """
+        Build prompt using conversation history and prompts.yml for history-based responses.
+        
+        details:
+            Creates a prompt for history-based generation without document retrieval.
+            Uses the interpreted question and conversation history to construct
+            the appropriate prompt structure.
+
+        Args:
+            interpretation (Interpretation): Question interpretation results containing interpreted question.
+            history (List[Dict[str, str]]): List of previous conversation messages with 'role' and 'content'.
+
+        Returns:
+            str: Formatted prompt string for history-based generation.
+        """
+        # Use conversation history and prompts.yml for answer generation
+        # Pass empty docs list to _build_prompt to avoid retrieval
+        prompt, docs, context, truncated_history = self._build_prompt(
+            interpretation.interpreted_question, history, 0, 0
+        )
+
+        return prompt
+
+    def _standard_generation(
+        self,
+        prompt: str
+    ) -> str:
+        """
+        Generate answer using standard (non-streaming) LLM generation.
+        
+        details:
+            Handles standard generation for the answer() method. This is the
+            only difference between answer() and stream_answer() - the generation
+            mechanism used.
+
+        Args:
+            prompt (str): The formatted prompt string to generate from.
+
+        Returns:
+            str: Generated answer string.
+        """
+        outputs = self.llm(prompt)
+        return outputs[0]["generated_text"]
+
+    def _stream_generation(
+        self,
+        prompt: str,
+        max_new_tokens: int
+    ) -> Iterable[str]:
+        """
+        Generate answer using streaming LLM generation.
+        
+        details:
+            Handles streaming generation for the stream_answer() method. This is the
+            only difference between answer() and stream_answer() - the generation
+            mechanism used.
+
+        Args:
+            prompt (str): The formatted prompt string to generate from.
+            max_new_tokens (int): Maximum number of tokens to generate in the response.
+
+        Returns:
+            Iterable[str]: Generator yielding answer chunks.
+        """
+        # Prepare streaming
+        model = self.llm.model
+        tokenizer = self.tokenizer
+
+        # Tokenize input and move to model device
+        inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+
+        streamer = TextIteratorStreamer(
+            tokenizer,
+            skip_prompt=True,
+            skip_special_tokens=True,
+        )
+
+        generation_kwargs = dict(
+            **inputs,
+            streamer=streamer,
+            max_new_tokens=max_new_tokens,
+            do_sample=True,
+            temperature=0.2,
+            repetition_penalty=1.1,
+        )
+
+        # Run generate() in a background thread to iterate over streamer
+        thread = Thread(target=model.generate, kwargs=generation_kwargs)
+        thread.start()
+
+        def token_generator() -> Generator[str, None, None]:
+            for text in streamer:
+                # 'text' is already decoded text chunk
+                yield text
+
+        return token_generator()
+
     def _build_prompt(self,
                       question: str,
                       history: List[Dict[str, str]] = [],
@@ -261,21 +479,50 @@ class RagService:
             Tuple[str, List[LangchainDocument]]: Generated answer string and list of retrieved documents.
         """
         # Phase 1: Interpret question and determine strategy
-        interpretation = self.interpreter.interpret_question(question, history)
+        interpretation = self._interpret_question_phase1(question, history, self.skip_interpretation)
 
         if debug:
             logging.info(f"[RAG DEBUG] Question: {question}")
             logging.info(f"[RAG DEBUG] Interpretation: {interpretation.reasoning}")
             logging.info(f"[RAG DEBUG] Needs retrieval: {interpretation.needs_retrieval}")
-            logging.info(f"[RAG DEBUG] Confidence: {interpretation.confidence}")
+            logging.info(f"[RAG DEBUG] Interpretation confidence: {interpretation.interpretation_confidence}, Routing confidence: {interpretation.routing_confidence}")
 
         # Phase 2: Route to appropriate response strategy
         if interpretation.needs_retrieval:
-            return self._answer_with_retrieval(
-                interpretation, history, num_retrieved_docs, num_docs_final, debug
+            # Route 1: Retrieval-based response
+            prompt, docs, context, truncated_history = self._build_prompt_and_retrieve(
+                interpretation, history, num_retrieved_docs, num_docs_final
             )
+            
+            if debug:
+                logging.info(f"[RAG DEBUG] Search query: {interpretation.search_query or interpretation.interpreted_question}")
+                logging.info(f"[RAG DEBUG] Retrieved docs: {len(docs)}")
+                logging.info(f"[RAG DEBUG] Prompt tokens: {self._count_tokens(prompt)} / {self.max_context_tokens}")
+
+            # Generate answer using standard generation
+            answer = self._standard_generation(prompt)
+
+            if debug:
+                logging.info(f"[RAG DEBUG] Answer length: {len(answer)} chars")
+                logging.info(f"[RAG DEBUG] Answer preview: {answer[:100]}...")
+
+            return answer, docs
         else:
-            return self._answer_from_history(interpretation, debug)
+            # Route 2: History-based response
+            if debug:
+                logging.info(f"[RAG DEBUG] Using conversation history for answer generation")
+
+            # Build prompt using history
+            prompt = self._build_prompt_from_history(interpretation, history)
+            
+            if debug:
+                logging.info(f"[RAG DEBUG] Prompt tokens: {self._count_tokens(prompt)} / {self.max_context_tokens}")
+
+            # Generate answer using standard generation
+            answer = self._standard_generation(prompt)
+
+            # Return empty docs list since no retrieval was performed
+            return answer, []
     
     def stream_answer(
         self,
@@ -309,189 +556,44 @@ class RagService:
             Tuple[Iterable[str], List[LangchainDocument]]: Generator yielding answer chunks and list of retrieved documents.
         """
         # Phase 1: Interpret question and determine strategy
-        interpretation = self.interpreter.interpret_question(question, history)
+        interpretation = self._interpret_question_phase1(question, history, self.skip_interpretation)
 
         if debug:
             logging.info(f"[RAG DEBUG STREAM] Question: {question}")
             logging.info(f"[RAG DEBUG STREAM] Interpretation: {interpretation.reasoning}")
             logging.info(f"[RAG DEBUG STREAM] Needs retrieval: {interpretation.needs_retrieval}")
-            logging.info(f"[RAG DEBUG STREAM] Confidence: {interpretation.confidence}")
+            logging.info(f"[RAG DEBUG STREAM] Interpretation confidence: {interpretation.interpretation_confidence}, Routing confidence: {interpretation.routing_confidence}")
 
         # Phase 2: Route to appropriate streaming response strategy
         if interpretation.needs_retrieval:
-            return self._stream_with_retrieval(
-                interpretation, history, num_retrieved_docs, num_docs_final, max_new_tokens, debug
+            # Route 1: Retrieval-based streaming response
+            prompt, docs, context, truncated_history = self._build_prompt_and_retrieve(
+                interpretation, history, num_retrieved_docs, num_docs_final
             )
+            
+            if debug:
+                logging.info(f"[RAG DEBUG STREAM] Search query: {interpretation.search_query or interpretation.interpreted_question}")
+                logging.info(f"[RAG DEBUG STREAM] Retrieved docs: {len(docs)}")
+                logging.info(f"[RAG DEBUG STREAM] Prompt tokens: {self._count_tokens(prompt)} / {self.max_context_tokens}")
+
+            # Generate answer using streaming generation
+            answer_generator = self._stream_generation(prompt, max_new_tokens)
+
+            return answer_generator, docs
         else:
-            return self._stream_from_history(interpretation, debug)
+            # Route 2: History-based streaming response
+            if debug:
+                logging.info(f"[RAG DEBUG STREAM] Using conversation history for answer generation")
 
-    def _answer_with_retrieval(
-        self,
-        interpretation: Interpretation,
-        history: List[Dict[str, str]],
-        num_retrieved_docs: int,
-        num_docs_final: int,
-        debug: bool
-    ) -> Tuple[str, List[LangchainDocument]]:
-        """
-        Handles questions that require document retrieval and generation.
+            # Build prompt using history
+            prompt = self._build_prompt_from_history(interpretation, history)
+            
+            if debug:
+                logging.info(f"[RAG DEBUG STREAM] Prompt tokens: {self._count_tokens(prompt)} / {self.max_context_tokens}")
 
-        Args:
-            interpretation: Question interpretation results
-            history: Conversation history
-            num_retrieved_docs: Number of docs to retrieve
-            num_docs_final: Number of docs to include in context
-            debug: Enable debug logging
+            # Generate answer using streaming generation
+            answer_generator = self._stream_generation(prompt, max_new_tokens)
 
-        Returns:
-            Tuple of (answer, retrieved_docs)
-        """
-        # Use interpreted search query for better retrieval
-        search_query = interpretation.search_query or interpretation.interpreted_question
+            # Return empty docs list since no retrieval was performed
+            return answer_generator, []
 
-        # Build prompt with retrieved documents
-        prompt, docs, context, truncated_history = self._build_prompt(
-            search_query, history, num_retrieved_docs, num_docs_final
-        )
-
-        if debug:
-            logging.info(f"[RAG DEBUG] Search query: {search_query}")
-            logging.info(f"[RAG DEBUG] Retrieved docs: {len(docs)}")
-            logging.info(f"[RAG DEBUG] Prompt tokens: {self._count_tokens(prompt)} / {self.max_context_tokens}")
-
-        # Generate answer
-        outputs = self.llm(prompt)
-        answer = outputs[0]["generated_text"]
-
-        if debug:
-            logging.info(f"[RAG DEBUG] Answer length: {len(answer)} chars")
-            logging.info(f"[RAG DEBUG] Answer preview: {answer[:100]}...")
-
-        return answer, docs
-
-    def _answer_from_history(
-        self,
-        interpretation: Interpretation,
-        debug: bool
-    ) -> Tuple[str, List[LangchainDocument]]:
-        """
-        Handles conversational follow-ups that can be answered directly from history.
-
-        Args:
-            interpretation: Question interpretation results
-            debug: Enable debug logging
-
-        Returns:
-            Tuple of (direct_answer, empty_docs_list)
-        """
-        # Return the direct answer from interpretation
-        answer = interpretation.direct_answer or interpretation.interpreted_question
-
-        if debug:
-            logging.info(f"[RAG DEBUG] Direct answer from history: {len(answer)} chars")
-            logging.info(f"[RAG DEBUG] Answer preview: {answer[:100]}...")
-
-        # Return empty docs list since no retrieval was performed
-        return answer, []
-
-    def _stream_with_retrieval(
-        self,
-        interpretation: Interpretation,
-        history: List[Dict[str, str]],
-        num_retrieved_docs: int,
-        num_docs_final: int,
-        max_new_tokens: int,
-        debug: bool
-    ) -> Tuple[Iterable[str], List[LangchainDocument]]:
-        """
-        Streams answers that require document retrieval and generation.
-
-        Args:
-            interpretation: Question interpretation results
-            history: Conversation history
-            num_retrieved_docs: Number of docs to retrieve
-            num_docs_final: Number of docs to include in context
-            max_new_tokens: Maximum tokens to generate
-            debug: Enable debug logging
-
-        Returns:
-            Tuple of (answer_generator, retrieved_docs)
-        """
-        # Use interpreted search query for better retrieval
-        search_query = interpretation.search_query or interpretation.interpreted_question
-
-        # Build prompt with retrieved documents
-        prompt, docs, context, truncated_history = self._build_prompt(
-            search_query, history, num_retrieved_docs, num_docs_final
-        )
-
-        if debug:
-            logging.info(f"[RAG DEBUG STREAM] Search query: {search_query}")
-            logging.info(f"[RAG DEBUG STREAM] Retrieved docs: {len(docs)}")
-            logging.info(f"[RAG DEBUG STREAM] Prompt tokens: {self._count_tokens(prompt)} / {self.max_context_tokens}")
-
-        # Prepare streaming
-        model = self.llm.model
-        tokenizer = self.tokenizer
-
-        # Tokenize input and move to model device
-        inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
-
-        streamer = TextIteratorStreamer(
-            tokenizer,
-            skip_prompt=True,
-            skip_special_tokens=True,
-        )
-
-        generation_kwargs = dict(
-            **inputs,
-            streamer=streamer,
-            max_new_tokens=max_new_tokens,
-            do_sample=True,
-            temperature=0.2,
-            repetition_penalty=1.1,
-        )
-
-        # Run generate() in a background thread to iterate over streamer
-        thread = Thread(target=model.generate, kwargs=generation_kwargs)
-        thread.start()
-
-        def token_generator() -> Generator[str, None, None]:
-            for text in streamer:
-                # 'text' is already decoded text chunk
-                yield text
-
-        return token_generator(), docs
-
-    def _stream_from_history(
-        self,
-        interpretation: Interpretation,
-        debug: bool
-    ) -> Tuple[Iterable[str], List[LangchainDocument]]:
-        """
-        Streams direct answers from conversation history.
-
-        Args:
-            interpretation: Question interpretation results
-            debug: Enable debug logging
-
-        Returns:
-            Tuple of (answer_generator, empty_docs_list)
-        """
-        # Get the direct answer from interpretation
-        answer = interpretation.direct_answer or interpretation.interpreted_question
-
-        if debug:
-            logging.info(f"[RAG DEBUG STREAM] Direct answer from history: {len(answer)} chars")
-            logging.info(f"[RAG DEBUG STREAM] Answer preview: {answer[:100]}...")
-
-        # Convert direct answer to streaming generator
-        def token_generator() -> Generator[str, None, None]:
-            # Yield the answer in chunks to simulate streaming
-            # For simplicity, yield in reasonable-sized chunks
-            chunk_size = 20
-            for i in range(0, len(answer), chunk_size):
-                yield answer[i:i + chunk_size]
-
-        # Return empty docs list since no retrieval was performed
-        return token_generator(), []

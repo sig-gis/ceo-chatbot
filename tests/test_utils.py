@@ -65,13 +65,14 @@ class TestRagService(RagService):
         mock_docs (List[LangchainDocument]): Documents to return for retrieval.
         config_path (str): Path to config file for model/loading settings.
         max_context_tokens_override (int | None): Override max_context_tokens for testing.
+        skip_interpretation (bool): If True, skips question interpretation for testing.
 
     Notes:
         This enables testing conversation history, token management, and prompt building
         in isolation from actual document databases. Useful for truncation validation.
     """
 
-    def __init__(self, mock_docs: List[LangchainDocument], config_path: str = "conf/base/rag_config.yml", max_context_tokens_override: int | None = None):
+    def __init__(self, mock_docs: List[LangchainDocument], config_path: str = "conf/base/rag_config.yml", max_context_tokens_override: int | None = None, skip_interpretation: bool = False):
         """
         Initialize TestRagService with mock retriever.
 
@@ -83,9 +84,10 @@ class TestRagService(RagService):
             mock_docs (List[LangchainDocument]): Mock documents for retrieval.
             config_path (str): Config file path.
             max_context_tokens_override (int | None): Override max_context_tokens if provided.
+            skip_interpretation (bool): If True, skips question interpretation for testing.
         """
         mock_retriever = MockRetriever(mock_docs)
-        super().__init__(config_path=config_path, retriever=mock_retriever)
+        super().__init__(config_path=config_path, retriever=mock_retriever, skip_interpretation=skip_interpretation)
 
         if max_context_tokens_override is not None:
             self.max_context_tokens = max_context_tokens_override
