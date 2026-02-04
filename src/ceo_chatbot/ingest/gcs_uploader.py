@@ -30,9 +30,8 @@ class GCSUploader:
         if self.config.gcs_prefix:
             gcs_path += f"/{self.config.gcs_prefix}"
 
-        # Use gsutil to recursively copy the files
-        # -r for recursive, -m for parallel upload for better performance
-        cmd = ["gsutil", "-m", "cp", "-r", str(local_path), gcs_path]
+        # sync docs/source folder between github repo and GCS bucket's copy
+        cmd = ["gsutil", "rsync", "-r", str(local_path), gcs_path]
 
         try:
             subprocess.run(cmd, check=True, capture_output=True, text=True)

@@ -175,22 +175,21 @@ class RagService:
         Builds formatted context string from retrieved documents.
 
         details:
-            Formats document content with numbered prefixes and line breaks
-            for inclusion in the user message during prompt construction.
+            Formats document content with numbered prefixes, line breaks,
+            source titles, and source URLs for inclusion in the user message 
+            during prompt construction.
 
         Args:
-            docs (List[LangchainDocument]): List of retrieved documents with page_content.
+            docs (List[LangchainDocument]): List of retrieved documents with page_content and metadata.
 
         Returns:
-            str: Formatted context string with document separations.
+            str: Formatted context string with document titles and source URLs.
         """
         context = "\nExtracted documents:\n"
-        context += "".join(
-            [
-                f"Document {i}:::\n{doc.page_content}\n"
-                for i, doc in enumerate(docs)
-            ]
-        )
+        for i, doc in enumerate(docs):
+            url = doc.metadata.get("url", "No URL available")
+            title = doc.metadata.get("main_document_title") or doc.metadata.get("title") or f"Document {i}"
+            context += f"--- SOURCE TITLE: {title} | URL: {url} ---\n{doc.page_content}\n\n"
         return context
 
     def _interpret_question_phase1(

@@ -2,7 +2,18 @@ base_instructions:
   - role: system
     content: |
       Using the information contained in the context, give a comprehensive answer to the question.
-      Provide the number of the source document when relevant.
+      
+      CITATIONS:
+      - MANDATORY: All citations MUST use inline Markdown links: [Title from SOURCE TITLE](URL from SOURCE URL).
+      - PROHIBITED: Never use raw URLs in your response text.
+      - PROHIBITED: Never use labels like "Document X", "Source Document X", or "[X]".
+      - Every claim must be cited using the appropriate URL from the context headers.
+      - Example: "You can add imagery through the [Imagery Menu](https://collect-earth-online-doc.readthedocs.io/en/latest/institution/imagery.html)."
+      
+      URL GUIDELINES:
+      - ONLY use URLs explicitly provided in the "SOURCE URL" field of the context documents.
+      - DO NOT hallucinate or guess URLs.
+      - If you find a URL within the text of a document (e.g., an FAO link), preserve it exactly as is if you need to reference it.
 
 singleturn_prompt:
   - role: system
