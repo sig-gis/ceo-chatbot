@@ -66,16 +66,14 @@ class QuestionInterpreter:
     3. Generate appropriate search queries or direct responses
     """
 
-    def __init__(self, llm_pipeline, tokenizer):
+    def __init__(self, llm_provider):
         """
         Initialize interpreter with shared LLM infrastructure.
 
         Args:
-            llm_pipeline: HuggingFace text generation pipeline (shared with RagService)
-            tokenizer: Associated tokenizer for the LLM
+            llm_provider: LLMProvider instance (shared with RagService)
         """
-        self.llm = llm_pipeline
-        self.tokenizer = tokenizer
+        self.llm = llm_provider
 
     def interpret_question(self, question: str, history: List[Dict[str, str]]) -> Interpretation:
         """
@@ -95,13 +93,11 @@ class QuestionInterpreter:
 
             # Generate interpretation with optimized parameters
             # Increased max_new_tokens to 512 to handle potential duplicate output before the clean JSON
-            response = self.llm(
+            response = self.llm.generate(
                 prompt,
                 max_new_tokens=512,  # Structured responses
                 temperature=0.1,     # Deterministic
-                do_sample=True,      # But low creativity
-                return_full_text=False
-            )[0]["generated_text"]
+            )
 
             # Parse and validate response
             interpretation = self._parse_interpretation_response(response, question, history)

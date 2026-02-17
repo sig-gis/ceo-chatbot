@@ -4,6 +4,7 @@ import yaml
 from pathlib import Path
 from typing import Any, Dict, List
 from pydantic import BaseModel, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -99,3 +100,14 @@ def load_prompt_template(
         )
 
     return template
+class AppSettings(BaseSettings):
+    """Loads all required environment variables"""
+    # Define fields at the top level, using aliases to map to env vars.
+    # This is the most robust way to load them.
+    google_api_key: str = Field(..., alias='GOOGLE_API_KEY')
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding='utf-8',
+        extra='ignore'
+    )
