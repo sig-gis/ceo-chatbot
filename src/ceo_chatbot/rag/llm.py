@@ -9,8 +9,8 @@
     It handles initialization, text generation, and streaming.
 """
 
-import os
-from typing import Any, Dict, Iterable, Optional, Tuple, Union
+import logging
+from typing import Iterable, Optional, Tuple, List
 import torch
 from transformers import (
     AutoTokenizer,
@@ -21,7 +21,8 @@ from transformers import (
 )
 import google.genai as genai
 
-from ceo_chatbot.config import AppSettings
+from ceo_chatbot.config import AppSettings, RAGConfig
+
 
 
 class LLMProvider:
@@ -113,8 +114,8 @@ class HuggingFaceProvider(LLMProvider):
 
 class GeminiProvider(LLMProvider):
     """Provider for Google Gemini API using the new google-genai SDK."""
-    def __init__(self, model_name: str):
-        # Instantiate AppSettings to load from .env or environment
+    def __init__(self, model_choices:List[str]=None):
+        # Instantiate genai client with API key
         settings = AppSettings()
         api_key = settings.google_api_key
         
@@ -122,38 +123,92 @@ class GeminiProvider(LLMProvider):
             raise ValueError("GOOGLE_API_KEY not found in environment or .env file")
         
         self.client = genai.Client(api_key=api_key)
-        self.model_name = model_name
-        # Gemini 1.5 Flash/Pro have huge context, but we'll set a reasonable limit for RAG
-        self._max_context = 1000000 if "gemini" in model_name else 32768
+        
+        if not model_choices:
+            self.model_choices = ["gemini-2.0-flash"]
+        else:
+            self.model_choices = model_choices
+        
+        self._validate_model_choices()
 
+        # Gemini have huge context, but we'll set a reasonable limit for RAG
+        self._max_context = 1000000
+
+    def _validate_model_choices(self) -> List[str]:
+        model_pager = self.client.models.list(config={'page_size':5})
+        available_models = []
+        for model_page in model_pager:
+                model_name = model_page.name.strip('models/')
+                available_models.extend([model_name])
+        valid_models = [True for m in self.model_choices if m in available_models]
+        if all(valid_models):
+            return
+        else:
+            raise ValueError(f"{self.model_choices} not in list of availabe models ({available_models})")
+    
     def generate(self, prompt: str, **kwargs) -> str:
         config = {
             "temperature": kwargs.get("temperature", 0.2),
-            "max_output_tokens": kwargs.get("max_new_tokens", 500),
+            "max_output_tokens": kwargs.get("max_new_tokens", 16384), # 8192
         }
-        response = self.client.models.generate_content(
-            model=self.model_name,
-            contents=prompt,
-            config=config
-        )
-        return response.text
+        
+        models = self.model_choices
+        last_exception = None
+        
+        for model in models:
+            try:
+                response = self.client.models.generate_content(
+                    model=model,
+                    contents=prompt,
+                    config=config
+                )
+                return response.text
+                
+            except Exception as e:
+                logging.warning(f"Gemini model {model} failed during generation: {e}")
+                last_exception = e
+                continue # Try next model
+        
+        # If we get here, all models failed
+        raise last_exception
 
     def stream(self, prompt: str, **kwargs) -> Iterable[str]:
         config = {
             "temperature": kwargs.get("temperature", 0.2),
-            "max_output_tokens": kwargs.get("max_new_tokens", 500),
+            "max_output_tokens": kwargs.get("max_new_tokens", 16384), # 8192
         }
-        response = self.client.models.generate_content_stream(
-            model=self.model_name,
-            contents=prompt,
-            config=config
-        )
-        for chunk in response:
-            yield chunk.text
+
+        models = self.model_choices
+        last_exception = None
+        
+        for model in models:
+            try:
+                response = self.client.models.generate_content_stream(
+                    model=model,
+                    contents=prompt,
+                    config=config
+                )
+                # Buffer the entire response first to ensure atomicity
+                chunks = []
+                for chunk in response:
+                    chunks.append(chunk.text)
+                
+                # Only yield if fully buffered successfully
+                for text in chunks:
+                    yield text
+                return # Success
+                
+            except Exception as e:
+                logging.warning(f"Gemini model {model} failed during streaming: {e}")
+                last_exception = e
+                continue # Try next model
+            
+        # If we get here, all models failed
+        raise last_exception
 
     def count_tokens(self, text: str) -> int:
         response = self.client.models.count_tokens(
-            model=self.model_name,
+            model=self.model_choices[0],
             contents=text
         )
         return response.total_tokens
@@ -164,14 +219,20 @@ class GeminiProvider(LLMProvider):
 
 
 def get_reader_llm(
-    model_name: str = "HuggingFaceH4/zephyr-7b-beta",
+    config: RAGConfig
 ) -> Tuple[LLMProvider, Optional[PreTrainedTokenizerBase]]:
     """
     Factory function to get the appropriate LLM provider.
     """
-    if "gemini" in model_name.lower():
-        provider = GeminiProvider(model_name)
+    framework_choices = ["gemini","huggingface"]
+    llm_framework = config.llm_framework.lower()
+    if llm_framework not in ["gemini","huggingface"]:
+        raise ValueError(f"llm_framework must be one of {framework_choices}, got {llm_framework}")
+    
+    model_choices = config.model_choices  # these are validated in each LLMProvider class's __init__
+    if llm_framework == "gemini":
+        provider = GeminiProvider(model_choices)
         return provider, None
     else:
-        provider = HuggingFaceProvider(model_name)
+        provider = HuggingFaceProvider(model_choices)
         return provider, provider.tokenizer

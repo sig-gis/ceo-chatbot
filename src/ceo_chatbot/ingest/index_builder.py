@@ -18,7 +18,7 @@ def build_faiss_index(
     Build a FAISS index from documents using the specified embedding model.
     """
     config = load_rag_config(config_path)
-    embedding_model = get_embedding_model(model_name=config.embedding_model_name)
+    embedding_model = get_embedding_model(embedding_model_name=config.embedding_model_name)
     index = FAISS.from_documents(
         docs,
         embedding_model,

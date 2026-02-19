@@ -14,14 +14,13 @@ def _load_yaml(path: str | Path) -> Dict[str, Any]:
         raise FileNotFoundError(f"Config file not found: {path}")
     with path.open("r") as f:
         return yaml.safe_load(f) or {}
-    
-class RAGConfig(BaseModel):
+class RAGConfig(BaseModel):    
     embedding_model_name: str
     chunk_size: int = Field(gt=0, description="Chunk size must be positive")
-    reader_model_name: str
+    llm_framework: str
+    model_choices: List[str]
     vectorstore_path: Path
     prompt_file: Path
-
 class DocumentExtractionConfig(BaseModel):
     github_repo_url: str = Field(pattern=r'^https?://', description="Must be a valid HTTP/HTTPS URL")
     gcs_project_id: str

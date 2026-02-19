@@ -64,7 +64,7 @@ class RagService:
 
         # Load LLM & tokenizer
         reader_llm, tokenizer = get_reader_llm(
-            model_name=self.config.reader_model_name,
+            self.config,
         )
         self.llm: LLMProvider = reader_llm
         self.tokenizer: Optional[PreTrainedTokenizerBase] = tokenizer
@@ -73,8 +73,9 @@ class RagService:
         self.max_input_tokens = self.llm.max_context_tokens
         
         # Reserve tokens for generation response
-        reserve_for_generation = 500
-        self.max_context_tokens = self.max_input_tokens - reserve_for_generation
+        # Increased to 8192 to allow for longer, more complete responses with Gemini 2.5
+        self.reserve_for_generation = 8192
+        self.max_context_tokens = self.max_input_tokens - self.reserve_for_generation
 
         # Load base instructions and prompt extensions
         self.base_instructions = load_prompt_template(
@@ -342,7 +343,8 @@ class RagService:
 
     def _standard_generation(
         self,
-        prompt: str
+        prompt: str,
+        max_new_tokens: Optional[int] = None
     ) -> str:
         """
         Generate answer using standard (non-streaming) LLM generation.
@@ -354,11 +356,18 @@ class RagService:
 
         Args:
             prompt (str): The formatted prompt string to generate from.
+            max_new_tokens (Optional[int]): Maximum number of tokens to generate.
 
         Returns:
             str: Generated answer string.
         """
-        return self.llm.generate(prompt)
+        kwargs = {}
+        if max_new_tokens:
+            kwargs["max_new_tokens"] = max_new_tokens
+        elif hasattr(self, "reserve_for_generation"):
+            kwargs["max_new_tokens"] = self.reserve_for_generation
+            
+        return self.llm.generate(prompt, **kwargs)
 
     def _stream_generation(
         self,
@@ -430,6 +439,7 @@ class RagService:
         history: List[Dict[str, str]] = [],
         num_retrieved_docs: int = 30,
         num_docs_final: int = 5,
+        max_new_tokens: Optional[int] = None,
         debug: bool = False
     ) -> Tuple[str, List[LangchainDocument]]:
         """
@@ -475,7 +485,7 @@ class RagService:
                 logging.info(f"[RAG DEBUG] Prompt tokens: {self._count_tokens(prompt)} / {self.max_context_tokens}")
 
             # Generate answer using standard generation
-            answer = self._standard_generation(prompt)
+            answer = self._standard_generation(prompt, max_new_tokens=max_new_tokens)
 
             if debug:
                 logging.info(f"[RAG DEBUG] Answer length: {len(answer)} chars")
@@ -494,7 +504,7 @@ class RagService:
                 logging.info(f"[RAG DEBUG] Prompt tokens: {self._count_tokens(prompt)} / {self.max_context_tokens}")
 
             # Generate answer using standard generation
-            answer = self._standard_generation(prompt)
+            answer = self._standard_generation(prompt, max_new_tokens=max_new_tokens)
 
             # Return empty docs list since no retrieval was performed
             return answer, []
@@ -505,7 +515,6 @@ class RagService:
         history: List[Dict[str, str]] = [],
         num_retrieved_docs: int = 30,
         num_docs_final: int = 5,
-        max_new_tokens: int = 500,
         debug: bool = False
     ) -> Tuple[Iterable[str], List[LangchainDocument]]:
         """
@@ -552,7 +561,7 @@ class RagService:
                 logging.info(f"[RAG DEBUG STREAM] Prompt tokens: {self._count_tokens(prompt)} / {self.max_context_tokens}")
 
             # Generate answer using streaming generation
-            answer_generator = self._stream_generation(prompt, max_new_tokens)
+            answer_generator = self._stream_generation(prompt, self.reserve_for_generation)
 
             return answer_generator, docs
         else:
