@@ -1,3 +1,4 @@
+
 """
  #! src/ceo_chatbot/rag/llm.py
  summary:
@@ -43,7 +44,7 @@ class LLMProvider:
 
 class HuggingFaceProvider(LLMProvider):
     """Provider for Hugging Face local models."""
-    def __init__(self, model_name: str):
+    def __init__(self, model_name: str, max_output_tokens: int):
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_use_double_quant=True,
@@ -65,8 +66,9 @@ class HuggingFaceProvider(LLMProvider):
             temperature=0.2,
             repetition_penalty=1.1,
             return_full_text=False,
-            max_new_tokens=500,
+            max_new_tokens=max_output_tokens, # Use configured value
         )
+        self.max_output_tokens = max_output_tokens
         
         # Try to get max position embeddings
         if hasattr(self.model.config, "max_position_embeddings"):
@@ -75,7 +77,9 @@ class HuggingFaceProvider(LLMProvider):
             self._max_context = 4096 # Fallback
 
     def generate(self, prompt: str, **kwargs) -> str:
-        outputs = self.pipeline(prompt, **kwargs)
+        # Allow kwargs to override default max_output_tokens
+        max_tokens_to_generate = kwargs.pop("max_output_tokens", self.max_output_tokens)
+        outputs = self.pipeline(prompt, max_new_tokens=max_tokens_to_generate, **kwargs)
         return outputs[0]["generated_text"]
 
     def stream(self, prompt: str, **kwargs) -> Iterable[str]:
@@ -88,11 +92,12 @@ class HuggingFaceProvider(LLMProvider):
             skip_prompt=True,
             skip_special_tokens=True,
         )
-
+        # Allow kwargs to override default max_output_tokens
+        max_tokens_to_generate = kwargs.pop("max_output_tokens", self.max_output_tokens)
         generation_kwargs = dict(
             **inputs,
             streamer=streamer,
-            max_new_tokens=kwargs.get("max_new_tokens", 500),
+            max_new_tokens=max_tokens_to_generate,
             do_sample=True,
             temperature=kwargs.get("temperature", 0.2),
             repetition_penalty=1.1,
@@ -114,7 +119,7 @@ class HuggingFaceProvider(LLMProvider):
 
 class GeminiProvider(LLMProvider):
     """Provider for Google Gemini API using the new google-genai SDK."""
-    def __init__(self, model_choices:List[str]=None):
+    def __init__(self, model_choices:List[str]=None, max_output_tokens: int = 8192):
         # Instantiate genai client with API key
         settings = AppSettings()
         api_key = settings.google_api_key
@@ -133,6 +138,7 @@ class GeminiProvider(LLMProvider):
 
         # Gemini have huge context, but we'll set a reasonable limit for RAG
         self._max_context = 1000000
+        self.max_output_tokens = max_output_tokens
 
     def _validate_model_choices(self) -> List[str]:
         model_pager = self.client.models.list(config={'page_size':5})
@@ -147,10 +153,13 @@ class GeminiProvider(LLMProvider):
             raise ValueError(f"{self.model_choices} not in list of availabe models ({available_models})")
     
     def generate(self, prompt: str, **kwargs) -> str:
+        # Allow kwargs to override default max_output_tokens
+        max_tokens_to_generate = kwargs.pop("max_output_tokens", self.max_output_tokens)
         config = {
             "temperature": kwargs.get("temperature", 0.2),
-            "max_output_tokens": kwargs.get("max_new_tokens", 16384), # 8192
-        }
+            "max_output_tokens": max_tokens_to_generate,
+            "response_mime_type": kwargs.get("response_mime_type",None) # allow caller of generate to set this (i.e. interpreter caller)
+            }
         
         models = self.model_choices
         last_exception = None
@@ -165,7 +174,7 @@ class GeminiProvider(LLMProvider):
                 return response.text
                 
             except Exception as e:
-                logging.warning(f"Gemini model {model} failed during generation: {e}")
+                logging.warning(f"Warning: Gemini model {model} failed during generation: {e}")
                 last_exception = e
                 continue # Try next model
         
@@ -173,9 +182,11 @@ class GeminiProvider(LLMProvider):
         raise last_exception
 
     def stream(self, prompt: str, **kwargs) -> Iterable[str]:
+        # Allow kwargs to override default max_output_tokens
+        max_tokens_to_generate = kwargs.pop("max_output_tokens", self.max_output_tokens)
         config = {
             "temperature": kwargs.get("temperature", 0.2),
-            "max_output_tokens": kwargs.get("max_new_tokens", 16384), # 8192
+            "max_output_tokens": max_tokens_to_generate,
         }
 
         models = self.model_choices
@@ -199,7 +210,7 @@ class GeminiProvider(LLMProvider):
                 return # Success
                 
             except Exception as e:
-                logging.warning(f"Gemini model {model} failed during streaming: {e}")
+                logging.warning(f"Warning: Gemini model {model} failed during streaming: {e}")
                 last_exception = e
                 continue # Try next model
             
@@ -231,8 +242,8 @@ def get_reader_llm(
     
     model_choices = config.model_choices  # these are validated in each LLMProvider class's __init__
     if llm_framework == "gemini":
-        provider = GeminiProvider(model_choices)
+        provider = GeminiProvider(model_choices, max_output_tokens=config.max_output_tokens)
         return provider, None
     else:
-        provider = HuggingFaceProvider(model_choices)
+        provider = HuggingFaceProvider(model_choices[0], max_output_tokens=config.max_output_tokens)
         return provider, provider.tokenizer

@@ -1,6 +1,7 @@
 embedding_model_name: "google/embeddinggemma-300m"
 chunk_size: 512
 llm_framework: "gemini" # "huggingface"
-model_choices: ["gemini-2.5-flash","gemini-2.0-flash"] # ["Qwen/Qwen3-4B-Instruct-2507"]
+model_choices: ["gemini-2.5-flash","gemini-2.0-flash"]
 vectorstore_path: "data/vectorstores/ceo_docs_faiss"
 prompt_file: "conf/base/prompts.yml"
+max_output_tokens: 8192

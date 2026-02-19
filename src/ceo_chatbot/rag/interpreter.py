@@ -1,3 +1,4 @@
+
 """
  #! src/ceo_chatbot/rag/interpreter.py
  summary:
@@ -33,7 +34,7 @@ class Interpretation(BaseModel):
     search_query: Optional[str] = None # if needs_retrieval=True, a search_query to be passed to vectordb retriever
 
     # Context and metadata
-    context_used: str = Field(pattern=r'^(standalone|enhanced)$')  # "standalone" or "enhanced"
+    context_used: str = Field(pattern=r"^(standalone|enhanced)$")  # "standalone" or "enhanced"
     reasoning: str
 
     # Optional rich metadata
@@ -41,14 +42,14 @@ class Interpretation(BaseModel):
     suggested_improvements: Optional[List[str]] = None   # Better ways to ask
 
     # Validation: search_query only when retrieval needed
-    @model_validator(mode='after')
-    def validate_routing_logic(self) -> 'Interpretation':
+    @model_validator(mode="after")
+    def validate_routing_logic(self) -> "Interpretation":
         if self.needs_retrieval:
             if self.search_query is None:
-                raise ValueError('search_query required when needs_retrieval=True')
+                raise ValueError("search_query required when needs_retrieval=True")
         else:
             if self.search_query is not None:
-                raise ValueError('search_query should be None when needs_retrieval=False')
+                raise ValueError("search_query should be None when needs_retrieval=False")
         return self
 
     def to_dict(self) -> Dict[str, Any]:
@@ -92,10 +93,12 @@ class QuestionInterpreter:
             prompt = self._build_interpretation_prompt(question, history)
 
             # Generate interpretation with optimized parameters
-            kwargs = {'max_new_tokens':4096,
-                      'temperature':0.1, # deterministic
-                      'response_mime_type': "application/json" # ensure response is parseable JSON
-                      } 
+            kwargs = {
+                # while this would be smart to do, cannot seem to set a safe upper token limit that does not cut off generated interpretation reponses especially when input prmprt is larger (long convos/questions)
+                # "max_output_tokens":1024, # Optimized for JSON output - 
+                "temperature":0.1, # deterministic
+                "response_mime_type": "application/json" # ensure response is parseable JSON
+                } 
             response = self.llm.generate(
                 prompt,
                 **kwargs     
@@ -107,7 +110,7 @@ class QuestionInterpreter:
             return interpretation
 
         except Exception as e:
-            logging.warning(f"Question interpretation failed: {e}")
+            logging.warning(f"Warning: Question interpretation failed: {e}")
             # Return safe fallback interpretation
             return self._create_fallback_interpretation(question, history)
 
@@ -152,7 +155,7 @@ Your task is to understand what the user is actually asking and determine how to
 
 RESPONSE FORMAT: Return a valid JSON object with this exact structure:
 ```json
-{{    
+{{
     # Core question data
     "original_question": str, # the original question passed in
     "interpreted_question": str, # your interpretation of what the user is actually asking
@@ -167,7 +170,7 @@ RESPONSE FORMAT: Return a valid JSON object with this exact structure:
     "search_query": Optional[str] = None, # if needs_retrieval=True, a search_query to be passed to vectordb retriever
 
     # Context and metadata
-    "context_used": str = Field(pattern=r'^(standalone|enhanced)$'),  # "enhanced" if history is provided, else "standalone"
+    "context_used": str = Field(pattern=r"^(standalone|enhanced)$"),  # "enhanced" if history is provided, else "standalone"
     "reasoning": str, # Explain your reasoning for routing decision
 
     # Optional rich metadata
@@ -261,7 +264,7 @@ JSON RESPONSE:"""
             # I had an LLM write this and I don't put much faith in it.
             # this was actually a solution to the 'unparseable response' problem I had to a HuggingFace model 
             # Gemini models return parseable json without issue.
-            logging.warning("could not load LLM response as json, attempting to parse")
+            logging.warning("Warning: could not load LLM response as json, attempting to parse")
             try:
                 json_candidates = []
 
@@ -330,7 +333,7 @@ JSON RESPONSE:"""
                         data = json.loads(repaired_fallback)
                     else:
                         # Log the failed response for debugging
-                        logging.warning(f"Failed to find JSON in response: {response}")
+                        logging.warning(f"Warning: Failed to find JSON in response: {response}")
                         raise ValueError("No JSON found in response")
 
                 # Determine context used
@@ -354,7 +357,7 @@ JSON RESPONSE:"""
                 )
 
             except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
-                logging.warning(f"Failed to parse interpretation response: {e}")
+                logging.warning(f"Warning: Failed to parse interpretation response: {e}")
                 return self._create_fallback_interpretation(original_question, history)
 
     def _create_fallback_interpretation(self, question: str, history: List[Dict[str, str]]) -> Interpretation:

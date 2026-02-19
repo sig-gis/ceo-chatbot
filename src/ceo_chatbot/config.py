@@ -21,6 +21,7 @@ class RAGConfig(BaseModel):
     model_choices: List[str]
     vectorstore_path: Path
     prompt_file: Path
+    max_output_tokens: int = Field(gt=1024, description="this can also be configured downstream")
 class DocumentExtractionConfig(BaseModel):
     github_repo_url: str = Field(pattern=r'^https?://', description="Must be a valid HTTP/HTTPS URL")
     gcs_project_id: str
