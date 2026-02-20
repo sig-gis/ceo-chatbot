@@ -12,7 +12,7 @@ def load_faiss_index(
     """
     Load a FAISS index from disk with a compatible embedding model.
     """
-    embedding_model = get_embedding_model(model_name=embedding_model_name)
+    embedding_model = get_embedding_model(embedding_model_name=embedding_model_name)
     index = FAISS.load_local(
         folder_path=str(index_dir),
         embeddings=embedding_model,

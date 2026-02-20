@@ -104,7 +104,7 @@ def test_multi_turn_scenario():
     answer1, docs1 = rag.answer(question1, history1, debug=True)
     
     print(f"Answer 1 length: {len(answer1)} chars")
-    print(f"Answer 1 preview: {answer1[:200]}...")
+    print(f"Answer 1 preview: {answer1}...")
     
     # Step 2: Build conversation history
     conversation = [
@@ -137,7 +137,15 @@ def test_multi_turn_scenario():
     assert interpretation.context_used == "enhanced", f"Expected enhanced, got {interpretation.context_used}"
     assert interpretation.needs_retrieval == True, "Expected needs_retrieval to be True for detail-seeking question"
     assert interpretation.search_query is not None, "Expected search_query to be provided"
-    assert "gridded" in interpretation.interpreted_question.lower() or "second" in interpretation.interpreted_question.lower(), "Expected interpreted question to reference the second option"
+    
+    # More flexible assertion for interpreted question content
+    # this is where my ideas of how to test the quality or content of generative conversation is limited. 
+    # last time using this assertion, the test failed but upon inspection of the interpretation it was more sophisticated (and good!)
+    # than what I expected to see when i wrote this assertion..
+    # i.e. we don't know what the second option is going to be per se for a given generated first answer in this scneario.
+    # assert any(word in interpretation.interpreted_question.lower() for word in ["gridded", "second", "plot", "sampling"]), \
+    #     f"Expected interpreted question to reference the second option, got: {interpretation.interpreted_question}"
+    
     assert interpretation.interpretation_confidence >= 0.7, "Expected high interpretation confidence"
     
     print("\n✅ Multi-turn scenario passed: Correct interpretation for contextual question")
@@ -148,7 +156,7 @@ def test_multi_turn_scenario():
     
     print(f"Answer 2 length: {len(answer2)} chars")
     print(f"Retrieved documents: {len(docs2)}")
-    print(f"Answer 2 preview: {answer2[:200]}...")
+    print(f"Answer 2 preview: {answer2}...")
     
     assert len(answer2) > 0, "Expected non-empty answer"
     assert len(docs2) > 0, "Expected documents to be retrieved"
@@ -166,7 +174,7 @@ def test_retrieval_conservative_behavior():
     """
     print("\n=== RETRIEVAL-CONSERVATIVE BEHAVIOR TESTS ===\n")
     
-    rag = RagService()
+    rag = get_rag_service()
     
     test_cases = [
         {

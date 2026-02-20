@@ -1,3 +1,4 @@
+
 """
  #! src/ceo_chatbot/rag/pipeline.py
  summary:
@@ -9,14 +10,13 @@
     Supports both single-turn and multi-turn conversations with automatic context management.
 """
 
-from typing import Callable, Dict, Generator, Iterable, List, Tuple
+from typing import Callable, Dict, Generator, Iterable, List, Tuple, Optional
 from pathlib import Path
-from threading import Thread
 import logging
 from langchain_core.documents import Document as LangchainDocument
-from transformers import AutoConfig, PreTrainedTokenizerBase, TextIteratorStreamer
+from transformers import PreTrainedTokenizerBase
 from ceo_chatbot.config import load_rag_config, load_prompt_template
-from ceo_chatbot.rag.llm import get_reader_llm
+from ceo_chatbot.rag.llm import get_reader_llm, LLMProvider
 from ceo_chatbot.rag.retriever import load_faiss_index, get_retriever
 from ceo_chatbot.rag.interpreter import QuestionInterpreter, Interpretation
 
@@ -65,18 +65,17 @@ class RagService:
 
         # Load LLM & tokenizer
         reader_llm, tokenizer = get_reader_llm(
-            model_name=self.config.reader_model_name,
+            self.config,
         )
-        self.llm = reader_llm
-        self.tokenizer: PreTrainedTokenizerBase = tokenizer
+        self.llm: LLMProvider = reader_llm
+        self.tokenizer: Optional[PreTrainedTokenizerBase] = tokenizer
 
-        # Get model's max input tokens and set context limit
-        model_config = AutoConfig.from_pretrained(self.config.reader_model_name)
-        self.max_input_tokens = model_config.max_position_embeddings
+        # Get model\'s max input tokens and set context limit
+        self.max_input_tokens = self.llm.max_context_tokens
         
-        # Reserve tokens for generation response
-        reserve_for_generation = 500
-        self.max_context_tokens = self.max_input_tokens - reserve_for_generation
+        # Set default max output tokens for generation response from config
+        self.default_max_output_tokens = self.config.max_output_tokens
+        self.max_context_tokens = self.max_input_tokens - self.default_max_output_tokens
 
         # Load base instructions and prompt extensions
         self.base_instructions = load_prompt_template(
@@ -93,14 +92,14 @@ class RagService:
         self.skip_interpretation = skip_interpretation
 
         # Initialize question interpreter for two-phase reasoning
-        self.interpreter = QuestionInterpreter(self.llm, self.tokenizer)
+        self.interpreter = QuestionInterpreter(self.llm)
 
     def _count_tokens(self, text: str) -> int:
         """
-        Counts the number of tokens in the given text using the tokenizer.
+        Counts the number of tokens in the given text using the LLM provider.
 
         details:
-            Uses the tokenizer's encode method to tokenize the text and count tokens.
+            Uses the provider's count_tokens method.
             Essential for estimating prompt lengths to prevent exceeding model context limits.
 
         Args:
@@ -109,7 +108,25 @@ class RagService:
         Returns:
             int: Number of tokens in the text.
         """
-        return len(self.tokenizer.encode(text))
+        return self.llm.count_tokens(text)
+
+    def _apply_template(self, messages: List[Dict[str, str]]) -> str:
+        """
+        Applies chat template to messages.
+        """
+        if self.tokenizer:
+            return self.tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            )
+        else:
+            # Fallback for providers without a HF tokenizer (like Gemini)
+            prompt = ""
+            for msg in messages:
+                role = msg["role"].upper()
+                content = msg["content"]
+                prompt += f"{role}: {content}\n\n"
+            prompt += "ASSISTANT: "
+            return prompt
 
     def _truncate_history(
         self,
@@ -148,9 +165,7 @@ class RagService:
         ]
 
         # Build candidate prompt and check token count
-        candidate_prompt = self.tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
+        candidate_prompt = self._apply_template(messages)
         token_count = self._count_tokens(candidate_prompt)
 
         if token_count <= self.max_context_tokens:
@@ -163,9 +178,7 @@ class RagService:
             messages = [base_system_message] + truncated_history + [
                 {"role": "user", "content": user_content}
             ]
-            candidate_prompt = self.tokenizer.apply_chat_template(
-                messages, tokenize=False, add_generation_prompt=True
-            )
+            candidate_prompt = self._apply_template(messages)
             token_count = self._count_tokens(candidate_prompt)
 
         return truncated_history
@@ -297,9 +310,7 @@ class RagService:
         ]
 
         # 5. Apply chat template to get final prompt
-        prompt = self.tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
+        prompt = self._apply_template(messages)
         return prompt, docs, context, truncated_history
 
     def _build_prompt_from_history(
@@ -348,13 +359,11 @@ class RagService:
         Returns:
             str: Generated answer string.
         """
-        outputs = self.llm(prompt)
-        return outputs[0]["generated_text"]
+        return self.llm.generate(prompt, max_output_tokens=self.default_max_output_tokens)
 
     def _stream_generation(
         self,
-        prompt: str,
-        max_new_tokens: int
+        prompt: str
     ) -> Iterable[str]:
         """
         Generate answer using streaming LLM generation.
@@ -366,45 +375,14 @@ class RagService:
 
         Args:
             prompt (str): The formatted prompt string to generate from.
-            max_new_tokens (int): Maximum number of tokens to generate in the response.
 
         Returns:
             Iterable[str]: Generator yielding answer chunks.
         """
-        # Prepare streaming
-        model = self.llm.model
-        tokenizer = self.tokenizer
+        return self.llm.stream(prompt, max_output_tokens=self.default_max_output_tokens)
 
-        # Tokenize input and move to model device
-        inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
-
-        streamer = TextIteratorStreamer(
-            tokenizer,
-            skip_prompt=True,
-            skip_special_tokens=True,
-        )
-
-        generation_kwargs = dict(
-            **inputs,
-            streamer=streamer,
-            max_new_tokens=max_new_tokens,
-            do_sample=True,
-            temperature=0.2,
-            repetition_penalty=1.1,
-        )
-
-        # Run generate() in a background thread to iterate over streamer
-        thread = Thread(target=model.generate, kwargs=generation_kwargs)
-        thread.start()
-
-        def token_generator() -> Generator[str, None, None]:
-            for text in streamer:
-                # 'text' is already decoded text chunk
-                yield text
-
-        return token_generator()
-
-    def _build_prompt(self,
+    def _build_prompt(
+                      self,
                       question: str,
                       history: List[Dict[str, str]] = [],
                       num_retrieved_docs: int = 30,
@@ -442,9 +420,7 @@ class RagService:
         ]
 
         # 5. Apply chat template to get final prompt
-        prompt = self.tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
+        prompt = self._apply_template(messages)
         return prompt, docs, context, truncated_history
          
     
@@ -529,7 +505,6 @@ class RagService:
         history: List[Dict[str, str]] = [],
         num_retrieved_docs: int = 30,
         num_docs_final: int = 5,
-        max_new_tokens: int = 500,
         debug: bool = False
     ) -> Tuple[Iterable[str], List[LangchainDocument]]:
         """
@@ -548,7 +523,6 @@ class RagService:
             history (List[Dict[str, str]]): List of previous conversation messages with 'role' and 'content'.
             num_retrieved_docs (int): Number of documents to retrieve initially from vector store.
             num_docs_final (int): Number of top documents to include in the final context.
-            max_new_tokens (int): Maximum number of tokens to generate in the response.
             debug (bool): Enable debug logging of internal pipeline steps if True.
 
         Returns:
@@ -576,7 +550,7 @@ class RagService:
                 logging.info(f"[RAG DEBUG STREAM] Prompt tokens: {self._count_tokens(prompt)} / {self.max_context_tokens}")
 
             # Generate answer using streaming generation
-            answer_generator = self._stream_generation(prompt, max_new_tokens)
+            answer_generator = self._stream_generation(prompt)
 
             return answer_generator, docs
         else:
@@ -591,8 +565,7 @@ class RagService:
                 logging.info(f"[RAG DEBUG STREAM] Prompt tokens: {self._count_tokens(prompt)} / {self.max_context_tokens}")
 
             # Generate answer using streaming generation
-            answer_generator = self._stream_generation(prompt, max_new_tokens)
+            answer_generator = self._stream_generation(prompt)
 
             # Return empty docs list since no retrieval was performed
             return answer_generator, []
-
