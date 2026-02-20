@@ -31,16 +31,30 @@ class DocumentExtractionConfig(BaseModel):
     gcs_prefix: str = ""
 
 def load_rag_config(
-    base_path: str | Path = PROJECT_ROOT / "conf/base/rag_config.yml",
+    config_path: str | Path = PROJECT_ROOT / "conf/base/rag_config.yml",
 ) -> RAGConfig:
     """
     Load the RAG configuration from YAML to dataclass RAGConfig to configure pipeline.
 
     - base_path: Path(conf/base/rag_config.yml)
     """
-    base_path = Path(base_path)
-    base_cfg = _load_yaml(base_path)
+    config_path = Path(config_path)
+    cfg = _load_yaml(config_path)
 
+    # Extract nested values with defaults
+    embeddings = cfg.get("embeddings", {})
+    llm = cfg.get("llm", {})
+
+    return RAGConfig(
+        embedding_model_name=embeddings["embedding_model_name"],
+        chunk_size=embeddings.get("chunk_size", 512),
+        vectorstore_path=embeddings.get("vectorstore_path","data/vectorstores/ceo_docs_faiss"),
+        llm_framework=llm.get("llm_framework","gemini"),
+        model_choices=llm.get("model_choices",["gemini-2.5-flash"]),
+        max_output_tokens=llm.get("max_output_tokens", 8192),
+        prompt_file=llm.get("prompt_file","conf/base/prompts.yml")
+    )
+    
     return RAGConfig(**base_cfg)
 
 def load_document_extraction_config(
