@@ -1,5 +1,9 @@
 import streamlit as st
+from pathlib import Path
+
 from ceo_chatbot.rag.pipeline import RagService
+from ceo_chatbot.config import load_document_extraction_config, load_rag_config
+from ceo_chatbot.ingest.gcs_uploader import GCSHandler
 
 # load CEO Chatbot RAG service
 @st.cache_resource
@@ -13,6 +17,12 @@ def get_rag_service(config_path: str = "conf/base/rag_config.yml") -> RagService
     """
     return RagService(config_path=config_path)
 
+@st.cache_resource
+def get_db():
+    extract_config = load_document_extraction_config()
+    rag_config = load_rag_config()
+    handler = GCSHandler(extract_config,rag_config)
+    handler.init_db(Path("data/vectorstores/ceo_docs_faiss"))
 
 # chat UI
 st.set_page_config(page_title="Demo RAG Chatbot", page_icon="💬", layout="wide")
@@ -20,6 +30,7 @@ st.title("Demo RAG Chatbot")
 
 # Initialize RAG service
 with st.spinner("Loading RAG pipeline..."):
+    get_db()
     rag = get_rag_service()
 
 # Session state for messages

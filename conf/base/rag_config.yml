@@ -2,6 +2,7 @@ embeddings:
   embedding_model_name: "google/embeddinggemma-300m"
   chunk_size: 512
   vectorstore_path: "data/vectorstores/ceo_docs_faiss"
+  vectorstore_gcs:   "ceo-docs-faiss"
 
 llm:
   llm_framework: "gemini" # "huggingface"

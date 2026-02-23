@@ -20,6 +20,7 @@ class RAGConfig(BaseModel):
     llm_framework: str
     model_choices: List[str]
     vectorstore_path: Path
+    vectorstore_gcs: Path
     prompt_file: Path
     max_output_tokens: int = Field(gt=1024, description="this can also be configured downstream")
 class DocumentExtractionConfig(BaseModel):
@@ -49,14 +50,13 @@ def load_rag_config(
         embedding_model_name=embeddings["embedding_model_name"],
         chunk_size=embeddings.get("chunk_size", 512),
         vectorstore_path=embeddings.get("vectorstore_path","data/vectorstores/ceo_docs_faiss"),
+        vectorstore_gcs=embeddings.get("vectorstore_gcs","ceo-docs-faiss"),
         llm_framework=llm.get("llm_framework","gemini"),
         model_choices=llm.get("model_choices",["gemini-2.5-flash"]),
         max_output_tokens=llm.get("max_output_tokens", 8192),
         prompt_file=llm.get("prompt_file","conf/base/prompts.yml")
     )
     
-    return RAGConfig(**base_cfg)
-
 def load_document_extraction_config(
     config_path: str | Path = PROJECT_ROOT / "conf/base/extract_docs_config.yml",
 ) -> DocumentExtractionConfig:
@@ -118,7 +118,7 @@ class AppSettings(BaseSettings):
     """Loads all required environment variables"""
     # Define fields at the top level, using aliases to map to env vars.
     # This is the most robust way to load them.
-    google_api_key: str = Field(..., alias='GOOGLE_API_KEY')
+    gemini_api_key: str = Field(..., alias='GEMINI_API_KEY')
 
     model_config = SettingsConfigDict(
         env_file=".env",

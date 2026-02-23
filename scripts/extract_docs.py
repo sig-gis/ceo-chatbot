@@ -8,7 +8,7 @@ from pathlib import Path
 
 from ceo_chatbot.config import load_document_extraction_config
 from ceo_chatbot.ingest.github_loader import GitHubLoader
-from ceo_chatbot.ingest.gcs_uploader import GCSUploader
+from ceo_chatbot.ingest.gcs_uploader import GCSHandler
 
 def main():
     """Main execution function."""
@@ -24,7 +24,7 @@ def main():
 
         # Initialize components
         loader = GitHubLoader(config)
-        uploader = GCSUploader(config)
+        uploader = GCSHandler(config)
 
         # Perform the extraction and upload
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -34,7 +34,7 @@ def main():
             logging.info(f"Repository cloned to: {cloned_path}")
 
             logging.info("Uploading to Google Cloud Storage...")
-            uploader.upload(cloned_path)
+            uploader.upload_docs(cloned_path)
             logging.info("Upload completed successfully.")
 
         logging.info("Document extraction pipeline completed successfully.")
