@@ -1,17 +1,16 @@
 import subprocess
 from pathlib import Path
-from ..config import DocumentExtractionConfig, RAGConfig
+from ..config import RAGConfig, AppSettings
 class GCSHandler:
     """
     Handles file syncing between local machine and Google Cloud Storage
     """
 
     def __init__(self, 
-                 extract_config: DocumentExtractionConfig,
                  rag_config: RAGConfig):
         
+        self.app_settings = AppSettings()
         self.rag_config = rag_config
-        self.extract_config = extract_config
 
     def upload_docs(self, local_path: Path) -> str | Path:
         """
@@ -28,9 +27,10 @@ class GCSHandler:
             raise FileNotFoundError(f"Local path '{local_path}' does not exist.")
 
         # Determine the GCS destination
-        gcs_bucket = f"gs://{self.extract_config.gcs_bucket_name}"
-        if self.extract_config.gcs_prefix:
-            gcs_path = f"{gcs_bucket}/{self.extract_config.gcs_prefix}"
+        gcs_bucket = f"gs://{self.app_settings.docs_bucket_name}"
+        prefix = self.app_settings.folder_prefix
+        if prefix:
+            gcs_path = f"{gcs_bucket}/{prefix}"
 
         # sync docs/source folder between github repo and GCS bucket's copy
         cmd = ["gsutil", "rsync", "-r", str(local_path), gcs_path]
@@ -58,7 +58,7 @@ class GCSHandler:
             raise FileNotFoundError(f"Local path '{local_path}' does not exist.")
 
         # Determine the GCS destination
-        gcs_bucket = f"gs://{self.extract_config.gcs_bucket_name}"
+        gcs_bucket = f"gs://{self.app_settings.db_bucket_name}"
         if self.rag_config.vectorstore_gcs:
             gcs_path = f"{gcs_bucket}/{self.rag_config.vectorstore_gcs}"
 
@@ -75,11 +75,13 @@ class GCSHandler:
         
     def init_db(self, dest_path: str | Path = "data/vectorstores/ceo_docs_faiss") -> str | Path:
         """ sync down the FAISS DB from GCS """
+        if isinstance(dest_path,str):
+            dest_path = Path(dest_path)
         
         dest_path.mkdir(exist_ok=True, parents=True)
         
         # Determine the GCS destination
-        gcs_bucket = f"gs://{self.extract_config.gcs_bucket_name}"
+        gcs_bucket = f"gs://{self.app_settings.db_bucket_name}"
         if self.rag_config.vectorstore_gcs:
             gcs_path = f"{gcs_bucket}/{self.rag_config.vectorstore_gcs}"
 

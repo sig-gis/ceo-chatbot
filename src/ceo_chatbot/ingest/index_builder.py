@@ -8,7 +8,7 @@ from ceo_chatbot.ingest.loaders import load_rst_docs
 from ceo_chatbot.ingest.chunking import semantic_recursive_chunks
 from ceo_chatbot.ingest.embeddings import get_embedding_model
 from ceo_chatbot.ingest.gcs_uploader import GCSHandler
-from ceo_chatbot.config import load_rag_config, load_document_extraction_config
+from ceo_chatbot.config import load_rag_config, AppSettings
 
 
 def build_faiss_index(
@@ -30,7 +30,6 @@ def build_faiss_index(
 def build_and_save_index(
     output_dir: Path,
     rag_config: str | Path = "conf/base/rag_config.yml",
-    extraction_config: str | Path = "conf/base/extract_docs_config.yml"
 ) -> None:
     """
     Full ingest pipeline:
@@ -62,6 +61,6 @@ def build_and_save_index(
     print(f"FAISS index saved to {output_dir}")
 
     # upload the built faiss db's files to gcs
-    extraction_cfg = load_document_extraction_config(extraction_config)
-    gcs_handler = GCSHandler(extraction_cfg,rag_cfg)
+    app_settings = AppSettings()
+    gcs_handler = GCSHandler(rag_cfg)
     gcs_handler.upload_db(Path("data/vectorstores/ceo_docs_faiss"))

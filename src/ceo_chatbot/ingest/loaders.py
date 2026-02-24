@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 import glob
 
-from ceo_chatbot.config import load_document_extraction_config
+from ceo_chatbot.config import AppSettings
 
 def load_rst_docs(docs_dir: str = "data/ceo-docs") -> List[LangchainDocument]:
     """
@@ -55,17 +55,18 @@ def sync_ceo_docs(output_dir:str= "data/ceo-docs") -> Path:
     Sync local CEO docs data (at `output_dir`) with snapshot of it on the GCS bucket
     """
     
-    config = load_document_extraction_config()
-    print(f"Syncing CEO docs from gs://{config.gcs_bucket_name}/{config.gcs_prefix}")
+    app_settings = AppSettings()
+    print(f"Syncing CEO docs from gs://{app_settings.docs_bucket_name}/{app_settings.folder_prefix}")
     
     if not Path(output_dir).exists():
         print(f"Creating path '{output_dir}'")
         Path(output_dir).mkdir(exist_ok=True)
     
     # Determine the GCS source
-    gcs_path = f"gs://{config.gcs_bucket_name}"
-    if config.gcs_prefix:
-        gcs_path += f"/{config.gcs_prefix}"
+    gcs_path = f"gs://{app_settings.docs_bucket_name}"
+    gcs_prefix = app_settings.folder_prefix
+    if gcs_prefix:
+        gcs_path += f"/{gcs_prefix}"
 
     # rsync should allow for version syncing bw local and gcs
     cmd = ["gsutil", "-m","rsync", "-r", gcs_path, str(output_dir)]

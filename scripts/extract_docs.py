@@ -3,10 +3,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-# Add the src directory to the path for imports
-# sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-
-from ceo_chatbot.config import load_document_extraction_config
+from ceo_chatbot.config import load_rag_config
 from ceo_chatbot.ingest.github_loader import GitHubLoader
 from ceo_chatbot.ingest.gcs_uploader import GCSHandler
 
@@ -19,7 +16,7 @@ def main():
 
     try:
         # Load configuration
-        config = load_document_extraction_config()
+        config = load_rag_config()
         logging.info(f"Loaded configuration for GitHub repo: {config.github_repo_url}")
 
         # Initialize components

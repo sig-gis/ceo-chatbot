@@ -1,0 +1,81 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - main
+      - dev
+
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    name: Build and Deploy API
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Determine Environment
+        id: determine_env
+        run: |
+          # Determine the environment based on the branch name
+          BRANCH_NAME=$(echo "${GITHUB_REF}" | sed -E 's/refs\/[^\/]+\///')
+          if [[ "$BRANCH_NAME" == "main" ]]; then
+            echo "environment=prod" >> "$GITHUB_OUTPUT"
+            echo "service_suffix=-prod" >> "$GITHUB_OUTPUT"
+            echo "resource_suffix=_prod" >> "$GITHUB_OUTPUT"
+          elif [[ "$BRANCH_NAME" == "dev" ]]; then
+            echo "environment=dev" >> "$GITHUB_OUTPUT"
+            echo "service_suffix=-dev" >> "$GITHUB_OUTPUT"
+            echo "resource_suffix=_dev" >> "$GITHUB_OUTPUT"
+          else
+            echo "environment=test" >> "$GITHUB_OUTPUT"
+            echo "service_suffix=-test" >> "$GITHUB_OUTPUT"
+            echo "resource_suffix=_test" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set environment variables
+        run: |
+          echo "GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}" >> $GITHUB_ENV
+          echo "GCP_SERVICE_ACCOUNT=${{ secrets.GCP_SERVICE_ACCOUNT }}" >> $GITHUB_ENV
+          echo "GCP_BUCKET=${{ secrets.GCP_BUCKET }}${{ steps.determine_env.outputs.resource_suffix }}" >> $GITHUB_ENV
+          echo "SERVICE_NAME=ceo-chatbot-streamlit${{ steps.determine_env.outputs.service_suffix }}" >> $GITHUB_ENV
+          echo "SERVICE_SUFFIX=${{ steps.determine_env.outputs.service_suffix }}" >> $GITHUB_ENV
+
+      - name: Authenticate to Google Cloud
+        uses: 'google-github-actions/auth@v2'
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}   
+      
+      - name: 'Set up Cloud SDK'
+        uses: 'google-github-actions/setup-gcloud@v2'
+
+      - name: 'Debug: Print authenticated user and project'
+        run: |-
+          gcloud auth list
+          gcloud config list project
+
+      - name: Build and Push Docker image
+        run: |-
+          gcloud builds submit --project=${{ env.GCP_PROJECT_ID }} \
+            --tag "gcr.io/${{ env.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }}"
+      
+      - name: Deploy to Cloud Run
+        run: |-
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image "gcr.io/${{ env.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }}" \
+            --platform managed \
+            --region us-central1 \
+            --allow-unauthenticated \
+            --service-account=${{ env.GCP_SERVICE_ACCOUNT }} \
+            --set-env-vars "GCP_PROJECT=${{ env.GCP_PROJECT_ID }},GCP_BUCKET=${{ env.GCP_BUCKET }}
