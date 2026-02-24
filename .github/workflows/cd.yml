@@ -71,7 +71,7 @@ jobs:
 
       - name: Build and Push Docker image
         env:
-          DOCKER_BUILDKIT:1
+          DOCKER_BUILDKIT: 1
         run: |-
           gcloud builds submit --project=${{ env.PROJECT_ID }} \
             --tag "gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }}"
