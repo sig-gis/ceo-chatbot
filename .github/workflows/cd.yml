@@ -70,11 +70,11 @@ jobs:
           gcloud config list project
 
       - name: Build and Push Docker image
-        env:
-          DOCKER_BUILDKIT: 1
         run: |-
-          gcloud builds submit --project=${{ env.PROJECT_ID }} \
-            --tag "gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }}"
+          gcloud builds submit \
+            --project=${{ env.PROJECT_ID }} \
+            --config=cloudbuild.yaml \
+            --substitutions=\_PROJECT_ID=${{ env.PROJECT_ID }},\_SERVICE_NAME=${{ env.SERVICE_NAME }},\_SHORT_SHA=${{ github.sha }}
       
       - name: Deploy to Cloud Run
         run: |-

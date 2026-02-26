@@ -1,0 +1,15 @@
+# cloudbuild.yaml
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [
+      'build',
+      '--build-arg', 'DOCKER_BUILDKIT=1', # Still needed for BuildKit features
+      '--cache-from', 'gcr.io/${_PROJECT_ID}/${_SERVICE_NAME}:${_SHORT_SHA}', # Use substitution for dynamic image name
+      '--tag', 'gcr.io/${_PROJECT_ID}/${_SERVICE_NAME}:${_SHORT_SHA}',      # Use substitution for dynamic image name
+      '.'
+    ]
+    env:
+      - 'DOCKER_BUILDKIT=1' # Still needed for BuildKit to be enabled for this step
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: 1200s # Optional: Increase timeout if builds are long (e.g., 20 minutes)
