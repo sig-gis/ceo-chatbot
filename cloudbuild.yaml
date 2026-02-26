@@ -5,7 +5,7 @@ steps:
       'build',
       '--build-arg', 'DOCKER_BUILDKIT=1',
       '--cache-from', '${_ARTIFACT_REGISTRY_LOCATION}-docker.pkg.dev/${_PROJECT_ID}/${_ARTIFACT_REGISTRY_REPOSITORY}/${_SERVICE_NAME}:${_SHORT_SHA}',
-      '--tag', '${_ARTIFACT_REGISTRY_LOCATION}-docker.pkg.dev/${_PROJECT_ID}/${_ARTIFACT_REGISTRY_REPOSITORY}/${_SERVICE_NAME}:${_SHORT_SHA}',Use substitution for dynamic image name
+      '--tag', '${_ARTIFACT_REGISTRY_LOCATION}-docker.pkg.dev/${_PROJECT_ID}/${_ARTIFACT_REGISTRY_REPOSITORY}/${_SERVICE_NAME}:${_SHORT_SHA}',
       '.'
     ]
     env:
