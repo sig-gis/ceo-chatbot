@@ -61,7 +61,7 @@ jobs:
           echo "SERVICE_NAME=ceo-chatbot-streamlit${{ steps.determine_env.outputs.service_suffix }}" >> $GITHUB_ENV
           echo "SERVICE_SUFFIX=${{ steps.determine_env.outputs.service_suffix }}" >> $GITHUB_ENV
           echo "ARTIFACT_REGISTRY_LOCATION=us-central1" >> $GITHUB_ENV # Example region, adjust as needed
-          echo "ARTIFACT_REGISTRY_REPOSITORY=ceo-chatbot-repo" >> $GITHUB_ENV # Your Artifact Registry repo name
+          echo "ARTIFACT_REGISTRY_REPOSITORY=ceo-chatbot" >> $GITHUB_ENV # Your Artifact Registry repo name
 
       - name: Authenticate to Google Cloud
         uses: 'google-github-actions/auth@v2'
@@ -82,11 +82,11 @@ jobs:
           gcloud builds submit \
             --project=${{ env.PROJECT_ID }} \
             --config=cloudbuild.yaml \
-            --substitutions=\_PROJECT_ID=${{ env.PROJECT_ID }},\
+            --substitutions="\_PROJECT_ID=${{ env.PROJECT_ID }},\
             \_SERVICE_NAME=${{ env.SERVICE_NAME }},\
             \_SHORT_SHA=${{ env.SHORT_SHA }},\
             \_ARTIFACT_REGISTRY_LOCATION=${{ env.ARTIFACT_REGISTRY_LOCATION }},\
-            \_ARTIFACT_REGISTRY_REPOSITORY=${{ env.ARTIFACT_REGISTRY_REPOSITORY }}            
+            \_ARTIFACT_REGISTRY_REPOSITORY=${{ env.ARTIFACT_REGISTRY_REPOSITORY }}"            
       
       - name: Deploy to Cloud Run
         run: |-
