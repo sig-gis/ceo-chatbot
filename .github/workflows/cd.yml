@@ -43,6 +43,12 @@ jobs:
             echo "resource_suffix=_test" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Generate Short SHA
+        id: short_sha
+        run: |
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          echo "SHORT_SHA=$SHORT_SHA" >> "$GITHUB_ENV"
+
       - name: Set environment variables
         run: |
           echo "PROJECT_ID=${{ secrets.PROJECT_ID }}" >> $GITHUB_ENV
@@ -54,6 +60,8 @@ jobs:
           echo "DOCS_BUCKET=${{ secrets.DOCS_BUCKET }}${{ steps.determine_env.outputs.resource_suffix }}" >> $GITHUB_ENV
           echo "SERVICE_NAME=ceo-chatbot-streamlit${{ steps.determine_env.outputs.service_suffix }}" >> $GITHUB_ENV
           echo "SERVICE_SUFFIX=${{ steps.determine_env.outputs.service_suffix }}" >> $GITHUB_ENV
+          echo "ARTIFACT_REGISTRY_LOCATION=us-central1" >> $GITHUB_ENV # Example region, adjust as needed
+          echo "ARTIFACT_REGISTRY_REPOSITORY=ceo-chatbot-repo" >> $GITHUB_ENV # Your Artifact Registry repo name
 
       - name: Authenticate to Google Cloud
         uses: 'google-github-actions/auth@v2'
@@ -74,12 +82,16 @@ jobs:
           gcloud builds submit \
             --project=${{ env.PROJECT_ID }} \
             --config=cloudbuild.yaml \
-            --substitutions=\_PROJECT_ID=${{ env.PROJECT_ID }},\_SERVICE_NAME=${{ env.SERVICE_NAME }},\_SHORT_SHA=${{ github.sha }}
+            --substitutions=\_PROJECT_ID=${{ env.PROJECT_ID }},\
+            \_SERVICE_NAME=${{ env.SERVICE_NAME }},\
+            \_SHORT_SHA=${{ env.SHORT_SHA }},\
+            \_ARTIFACT_REGISTRY_LOCATION=${{ env.ARTIFACT_REGISTRY_LOCATION }},\
+            \_ARTIFACT_REGISTRY_REPOSITORY=${{ env.ARTIFACT_REGISTRY_REPOSITORY }}            
       
       - name: Deploy to Cloud Run
         run: |-
           gcloud run deploy ${{ env.SERVICE_NAME }} \
-            --image "gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }}" \
+            --image "${{ env.ARTIFACT_REGISTRY_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPOSITORY }}/${{ env.SERVICE_NAME }}:${{ env.SHORT_SHA }}" \
             --platform managed \
             --region us-central1 \
             --allow-unauthenticated \

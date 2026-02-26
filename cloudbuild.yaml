@@ -3,9 +3,9 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     args: [
       'build',
-      '--build-arg', 'DOCKER_BUILDKIT=1', # Still needed for BuildKit features
-      '--cache-from', 'gcr.io/${_PROJECT_ID}/${_SERVICE_NAME}:${_SHORT_SHA}', # Use substitution for dynamic image name
-      '--tag', 'gcr.io/${_PROJECT_ID}/${_SERVICE_NAME}:${_SHORT_SHA}',      # Use substitution for dynamic image name
+      '--build-arg', 'DOCKER_BUILDKIT=1',
+      '--cache-from', '${_ARTIFACT_REGISTRY_LOCATION}-docker.pkg.dev/${_PROJECT_ID}/${_ARTIFACT_REGISTRY_REPOSITORY}/${_SERVICE_NAME}:${_SHORT_SHA}',
+      '--tag', '${_ARTIFACT_REGISTRY_LOCATION}-docker.pkg.dev/${_PROJECT_ID}/${_ARTIFACT_REGISTRY_REPOSITORY}/${_SERVICE_NAME}:${_SHORT_SHA}',Use substitution for dynamic image name
       '.'
     ]
     env:
