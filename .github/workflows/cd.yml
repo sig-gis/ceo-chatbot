@@ -84,4 +84,4 @@ jobs:
             --region us-central1 \
             --allow-unauthenticated \
             --service-account=${{ env.GCP_SERVICE_ACCOUNT }} \
-            --set-env-vars "PROJECT_ID=${{ env.PROJECT_ID }},PREFIX=${{ env.PREFIX }},HF_TOKEN=${{ env.HF_TOKEN }},GEMINI_API_KEY=${{ env.GEMINI_API_KEY }},DOCS_BUCKET=${{ env.DOCS_BUCKET }},DB_BUCKET=${{ env.DB_BUCKET }}
+            --set-env-vars "PROJECT_ID=${{ env.PROJECT_ID }},PREFIX=${{ env.PREFIX }},HF_TOKEN=${{ env.HF_TOKEN }},GEMINI_API_KEY=${{ env.GEMINI_API_KEY }},DOCS_BUCKET=${{ env.DOCS_BUCKET }},DB_BUCKET=${{ env.DB_BUCKET }}"
