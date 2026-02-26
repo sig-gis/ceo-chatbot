@@ -82,11 +82,7 @@ jobs:
           gcloud builds submit \
             --project=${{ env.PROJECT_ID }} \
             --config=cloudbuild.yaml \
-            --substitutions="_PROJECT_ID=${{ env.PROJECT_ID }},\
-            _SERVICE_NAME=${{ env.SERVICE_NAME }},\
-            _SHORT_SHA=${{ env.SHORT_SHA }},\
-            _ARTIFACT_REGISTRY_LOCATION=${{ env.ARTIFACT_REGISTRY_LOCATION }},\
-            _ARTIFACT_REGISTRY_REPOSITORY=${{ env.ARTIFACT_REGISTRY_REPOSITORY }}"            
+            --substitutions=_PROJECT_ID=${{ env.PROJECT_ID }},_SERVICE_NAME=${{ env.SERVICE_NAME }},_SHORT_SHA=${{ env.SHORT_SHA }},_ARTIFACT_REGISTRY_LOCATION=${{ env.ARTIFACT_REGISTRY_LOCATION }},_ARTIFACT_REGISTRY_REPOSITORY=${{ env.ARTIFACT_REGISTRY_REPOSITORY }}
       
       - name: Deploy to Cloud Run
         run: |-
