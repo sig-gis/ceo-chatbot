@@ -18,7 +18,7 @@ steps:
 
 options:
   logging: CLOUD_LOGGING_ONLY
-timeout: 1200s # Optional: Increase timeout if builds are long (e.g., 20 minutes)
+timeout: 2400s # Optional: Increase timeout if builds are long
 
 
 
