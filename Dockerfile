@@ -2,21 +2,6 @@
 # Use a Python image with uv pre-installed
 FROM ghcr.io/astral-sh/uv:python3.10-trixie
 
-# python 3.10 astral images:
-# ghcr.io/astral-sh/uv:python3.10-alpine
-# ghcr.io/astral-sh/uv:python3.10-trixie
-# ghcr.io/astral-sh/uv:python3.10-trixie-slim
-
-# For Docker Trixie base image - shadowutils install
-# RUN apt-get update && apt-get install -y shadow && rm -rf /var/lib/apt/lists/* # didn't work
-
-# # For Docker Alpine base image - shadowutils install
-# # RUN apk add --no-cache shadow \
-
-# # Setup a non-root user - see if installing shadowutils resolves groupadd cmd not found
-# RUN groupadd --system --gid 1001 nonroot \
-#  && useradd --system --gid 1001 --uid 1001 --create-home nonroot
-
 # INSTALL GCLOUD SDK ##############
 # Downloading gcloud package
 RUN curl https://dl.google.com/dl/cloudsdk/release/google-cloud-sdk.tar.gz > /tmp/google-cloud-sdk.tar.gz
@@ -66,8 +51,8 @@ ENV PATH="/app/.venv/bin:$PATH"
 # Reset the entrypoint, don't invoke `uv`
 ENTRYPOINT []
 
-# Use the non-root user to run our application
-# USER nonroot
+# https://medium.com/dsights/streamlit-deployment-on-google-cloud-serverless-container-platform-1a8330d29062
+ENV PORT=
 
 # Run the FastAPI application by default
 # Uses `uv run` to sync dependencies on startup, respecting UV_NO_DEV
@@ -76,11 +61,15 @@ ENTRYPOINT []
 # Note in production, you should use `fastapi run` instead
 # CMD ["uv", "run", "fastapi", "dev", "--host", "0.0.0.0", "src/uv_docker_example"]
 
-# Command to run the Streamlit app
-# CMD ["uv", "run", "streamlit", "run", "demo/chat_app.py", "--server.port", "8080", "--server.enableCORS", "true", "--server.enableXsrfProtection", "false"]
-# run gcloud auth first
-CMD ["/bin/bash", "-c", "gcloud auth activate-service-account --key-file=/app/keyfile.json && uv run streamlit run demo/chat_app.py --server.port 8080 --server.enableCORS true --server.enableXsrfProtection false"]
+# basic, works bc it uses SL default port and i can access hte Network URL it provides, but still have to configure port somehow for cloud run..
+# CMD ["/bin/bash", "-c", "gcloud auth activate-service-account --key-file=/app/keyfile.json && uv run streamlit run demo/chat_app.py"]
 
-# # Expose the Streamlit port
-EXPOSE 8080
+# Command to run the Streamlit app
+# https://medium.com/dsights/streamlit-deployment-on-google-cloud-serverless-container-platform-1a8330d29062
+CMD ["/bin/bash", "-c", "gcloud auth activate-service-account --key-file=/app/keyfile.json && uv run streamlit run demo/chat_app.py --server.port=${PORT}"]
+
+# removed for timebeing
+# --server.enableCORS true --server.enableXsrfProtection false"
+
+EXPOSE ${PORT}
 
