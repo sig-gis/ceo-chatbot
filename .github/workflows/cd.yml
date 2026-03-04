@@ -1,15 +1,12 @@
 name: Deploy to Cloud Run
 
+# removed push/pull actions to everything except main so this shouldn't run. 
+# we are putting this on pause till we get streamlit app deployed in a simpler way.
 on:
   push:
     branches:
-      - main
-      - dev
   pull_request:
     branches:
-      - main
-      - dev
-
 
 permissions:
   contents: read
