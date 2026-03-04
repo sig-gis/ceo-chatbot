@@ -14,8 +14,6 @@ def main(
     build_and_save_index(
         output_dir=Path(config.vectorstore_path),
     )
-    print(f"FAISS index saved to {config.vectorstore_path}")
-
 
 if __name__ == "__main__":
     main()

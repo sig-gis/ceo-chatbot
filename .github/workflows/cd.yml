@@ -1,0 +1,92 @@
+name: Deploy to Cloud Run
+
+# removed push/pull actions to everything except main so this shouldn't run. 
+# we are putting this on pause till we get streamlit app deployed in a simpler way.
+on:
+  push:
+    branches:
+  pull_request:
+    branches:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    name: Build and Deploy API
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Determine Environment
+        id: determine_env
+        run: |
+          # Determine the environment based on the branch name
+          BRANCH_NAME=$(echo "${GITHUB_REF}" | sed -E 's/refs\/[^\/]+\///')
+          if [[ "$BRANCH_NAME" == "main" ]]; then
+            echo "environment=prod" >> "$GITHUB_OUTPUT"
+            echo "service_suffix=-prod" >> "$GITHUB_OUTPUT"
+            echo "resource_suffix=_prod" >> "$GITHUB_OUTPUT"
+          elif [[ "$BRANCH_NAME" == "dev" ]]; then
+            echo "environment=dev" >> "$GITHUB_OUTPUT"
+            echo "service_suffix=-dev" >> "$GITHUB_OUTPUT"
+            echo "resource_suffix=_dev" >> "$GITHUB_OUTPUT"
+          else
+            echo "environment=test" >> "$GITHUB_OUTPUT"
+            echo "service_suffix=-test" >> "$GITHUB_OUTPUT"
+            echo "resource_suffix=_test" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate Short SHA
+        id: short_sha
+        run: |
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          echo "SHORT_SHA=$SHORT_SHA" >> "$GITHUB_ENV"
+
+      - name: Set environment variables
+        run: |
+          echo "PROJECT_ID=${{ secrets.PROJECT_ID }}" >> $GITHUB_ENV
+          echo "PREFIX=${{ secrets.PREFIX }}" >> $GITHUB_ENV
+          echo "HF_TOKEN=${{ secrets.HF_TOKEN }}" >> $GITHUB_ENV
+          echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> $GITHUB_ENV
+          echo "GCP_SERVICE_ACCOUNT=${{ secrets.GCP_SERVICE_ACCOUNT }}" >> $GITHUB_ENV
+          echo "DB_BUCKET=${{ secrets.DB_BUCKET }}${{ steps.determine_env.outputs.resource_suffix }}" >> $GITHUB_ENV
+          echo "DOCS_BUCKET=${{ secrets.DOCS_BUCKET }}${{ steps.determine_env.outputs.resource_suffix }}" >> $GITHUB_ENV
+          echo "SERVICE_NAME=ceo-chatbot-streamlit${{ steps.determine_env.outputs.service_suffix }}" >> $GITHUB_ENV
+          echo "SERVICE_SUFFIX=${{ steps.determine_env.outputs.service_suffix }}" >> $GITHUB_ENV
+          echo "ARTIFACT_REGISTRY_LOCATION=us-central1" >> $GITHUB_ENV # Example region, adjust as needed
+          echo "ARTIFACT_REGISTRY_REPOSITORY=ceo-chatbot" >> $GITHUB_ENV # Your Artifact Registry repo name
+
+      - name: Authenticate to Google Cloud
+        uses: 'google-github-actions/auth@v2'
+        with:
+          project_id: ${{ secrets.PROJECT_ID }}
+          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}   
+      
+      - name: 'Set up Cloud SDK'
+        uses: 'google-github-actions/setup-gcloud@v2'
+
+      - name: 'Debug: Print authenticated user and project'
+        run: |-
+          gcloud auth list
+          gcloud config list project
+
+      - name: Build and Push Docker image
+        run: |-
+          gcloud builds submit \
+            --project=${{ env.PROJECT_ID }} \
+            --config=cloudbuild.yaml \
+            --substitutions=_PROJECT_ID=${{ env.PROJECT_ID }},_SERVICE_NAME=${{ env.SERVICE_NAME }},_SHORT_SHA=${{ env.SHORT_SHA }},_ARTIFACT_REGISTRY_LOCATION=${{ env.ARTIFACT_REGISTRY_LOCATION }},_ARTIFACT_REGISTRY_REPOSITORY=${{ env.ARTIFACT_REGISTRY_REPOSITORY }}
+      
+      - name: Deploy to Cloud Run
+        run: |-
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image "${{ env.ARTIFACT_REGISTRY_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPOSITORY }}/${{ env.SERVICE_NAME }}:${{ env.SHORT_SHA }}" \
+            --platform managed \
+            --region us-central1 \
+            --allow-unauthenticated \
+            --service-account=${{ env.GCP_SERVICE_ACCOUNT }} \
+            --set-env-vars "PROJECT_ID=${{ env.PROJECT_ID }},PREFIX=${{ env.PREFIX }},HF_TOKEN=${{ env.HF_TOKEN }},GEMINI_API_KEY=${{ env.GEMINI_API_KEY }},DOCS_BUCKET=${{ env.DOCS_BUCKET }},DB_BUCKET=${{ env.DB_BUCKET }}"

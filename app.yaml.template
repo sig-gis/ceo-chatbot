@@ -1,0 +1,37 @@
+# https://docs.cloud.google.com/appengine/docs/flexible/reference/app-yaml?tab=python
+runtime: custom
+env: flex
+
+automatic_scaling:
+  max_num_instances: 1
+
+# Or manual scaling as below:
+# manual_scaling:
+#   instances: 1
+
+service_account: <sa-name>@<project-name>.iam.gserviceaccount.com
+
+resources:
+  cpu: 2
+  memory_gb: 2.3
+  disk_size_gb: 100
+  volumes:
+  - name: ramdisk1
+    volume_type: tmpfs
+    size_gb: 0.5
+
+env_variables:
+  PROJECT_ID: 
+  DB_BUCKET: 
+  DOCS_BUCKET: 
+  PREFIX: 
+  GEMINI_API_KEY: 
+  HF_TOKEN:
+
+skip_files:
+- .venv
+- uv.lock
+- pyproject.toml
+- .env.
+- .vscode
+- .clinerules
