@@ -80,6 +80,17 @@ class GCSStorage:
         """Upload a single file unconditionally."""
         self._bucket.blob(remote).upload_from_filename(local)
 
+    def blob_updated(self, remote: str) -> datetime | None:
+        """Return the GCS last-modified timestamp for a blob, or None if it does not exist.
+
+        blob() returns a stub with no metadata; reload() fetches .updated from GCS.
+        """
+        blob = self._bucket.blob(remote)
+        if not blob.exists():
+            return None
+        blob.reload()
+        return blob.updated
+
     def exists(self, remote: str) -> bool:
         """Return True if the blob exists in the bucket."""
         return self._bucket.blob(remote).exists()
