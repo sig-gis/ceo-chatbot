@@ -149,7 +149,21 @@ git clone https://github.com/sig-gis/ceo-chatbot.git
 
 ## Running on your laptop
 
-(TODO — sections for `extract`, `pipeline`, and `chatbot`)
+### Sync the source docs to GCS
+
+This command clones the CEO documentation repository from GitHub and uploads any new or changed files to the Google Cloud Storage bucket.
+
+```bash
+uv run python scripts/extract_docs.py
+```
+
+If it works, you will see a summary line like this at the end:
+
+```
+{'uploaded': 42, 'skipped': 0, 'total': 42}
+```
+
+`uploaded` is files sent to GCS, `skipped` is files already up to date, `total` is the sum.
 
 ### 1. Configure your environment
 

@@ -3,9 +3,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-from ceo_chatbot.config import load_rag_config
+from ceo_chatbot.config import AppSettings, load_rag_config
 from ceo_chatbot.ingest.github_loader import GitHubLoader
-from ceo_chatbot.ingest.gcs_uploader import GCSHandler
+from ceo_chatbot.storage import GCSStorage
+
 
 def main():
     """Main execution function."""
@@ -19,9 +20,13 @@ def main():
         config = load_rag_config()
         logging.info(f"Loaded configuration for GitHub repo: {config.github_repo_url}")
 
+        settings = AppSettings()
+        bucket_name = settings.docs_bucket_name
+        prefix = settings.folder_prefix
+
         # Initialize components
         loader = GitHubLoader(config)
-        uploader = GCSHandler(config)
+        gcs = GCSStorage(bucket_name)
 
         # Perform the extraction and upload
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -31,7 +36,8 @@ def main():
             logging.info(f"Repository cloned to: {cloned_path}")
 
             logging.info("Uploading to Google Cloud Storage...")
-            uploader.upload_docs(cloned_path)
+            result = gcs.sync_up(cloned_path, prefix)
+            print(result)
             logging.info("Upload completed successfully.")
 
         logging.info("Document extraction pipeline completed successfully.")

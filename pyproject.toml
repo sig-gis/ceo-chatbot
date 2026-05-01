@@ -17,11 +17,8 @@ dependencies = [
 
 [project.optional-dependencies]
 # Packages for document parsing
-extract = [
-    "unstructured[rst]>=0.18.21",
-    "openpyxl>=3.1.5",
-    "datasets>=4.4.1",
-]
+extract = []
+
 # Packages for generating the vector store
 pipeline = [
     "faiss-cpu>=1.7.4",
