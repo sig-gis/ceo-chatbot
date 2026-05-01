@@ -95,7 +95,7 @@ To check it installed correctly:
 
 You should see output starting with "Google Cloud SDK".
 
-### 2. Sign in so Python can access Google Cloud
+### 2. Authenticate with Google Cloud and set your Project ID
 
 Run this in your terminal:
 
@@ -115,7 +115,7 @@ Then tell gcloud which project to use:
 
 ### 3. Get a Gemini API key
 
-Follow your SOP or go to https://aistudio.google.com/apikey. Save this value. You'll paste it into a file in step 5.
+Follow your SOP or go to https://aistudio.google.com/apikey. Save this value. You'll need it for inference over the documents.
 
 ### 4. Install `uv`:
 
@@ -146,10 +146,22 @@ HTTPS:
 git clone https://github.com/sig-gis/ceo-chatbot.git
 ```
 
+#### 5.2. Install base dependencies
+
+Run this command to use the `uv` package manager to install dependencies common to all deployments
+
+```{bash}
+uv sync
+```
 
 ## Running on your laptop
 
-### Sync the source docs to GCS
+### 1. Configure your environment
+
+Copy `.env.example` to `.env`:
+Open `.env` in any text editor and fill in the values. Each line has a comment explaining what it's for.
+
+### 2. Sync the source docs with GCS
 
 This command clones the CEO documentation repository from GitHub and uploads any new or changed files to the Google Cloud Storage bucket.
 
@@ -157,19 +169,13 @@ This command clones the CEO documentation repository from GitHub and uploads any
 uv run python scripts/extract_docs.py
 ```
 
-If it works, you will see a summary line like this at the end:
+If it works, you will see a summary line like this at the end (42 is an arbitrary number):
 
 ```
 {'uploaded': 42, 'skipped': 0, 'total': 42}
 ```
 
-`uploaded` is files sent to GCS, `skipped` is files already up to date, `total` is the sum.
-
-### 1. Configure your environment
-
-Copy `.env.example` to `.env`:
-Open `.env` in any text editor and fill in the values. Each line has a
-comment explaining what it's for.
+`uploaded` is files sent to GCS, `skipped` is files already up to date, `total` is the sum. The CEO docs are pulled from openforis' CEO documentation on github, which is specified in `conf/base/rag_config.yml`
 
 <!-- Instructions below are outdated -->
 
