@@ -13,13 +13,14 @@ from ceo_chatbot.config import load_rag_config, AppSettings
 
 def build_faiss_index(
     docs: List[LangchainDocument],
-    config_path: str | Path = "conf/base/rag_config.yml"
+    config_path: str | Path = "conf/base/rag_config.yml",
+    device: str | None = None,
 ) -> FAISS:
     """
     Build a FAISS index from documents using the specified embedding model.
     """
     config = load_rag_config(config_path)
-    embedding_model = get_embedding_model(embedding_model_name=config.embedding_model_name)
+    embedding_model = get_embedding_model(embedding_model_name=config.embedding_model_name, device=device)
     index = FAISS.from_documents(
         docs,
         embedding_model,

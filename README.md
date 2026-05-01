@@ -177,6 +177,104 @@ If it works, you will see a summary line like this at the end (42 is an arbitrar
 
 `uploaded` is files sent to GCS, `skipped` is files already up to date, `total` is the sum. The CEO docs are pulled from openforis' CEO documentation on github, which is specified in `conf/base/rag_config.yml`
 
+### 3. Build the search index
+
+This command converts the source docs into a FAISS vector index that the chatbot searches at query time. It works as follows:
+
+1. **Docs**: checks `data/ceo-docs/` (configurable via `docs_path` in `conf/base/rag_config.yml`) for existing RST files. If found, uses them. If not, downloads them from GCS first.
+2. **Index**: loads the docs, splits them into chunks, embeds each chunk using a HuggingFace model, and builds a FAISS index. Saves the result to `data/vectorstores/ceo_docs_faiss/` (configurable via `vectorstore_path` in `conf/base/rag_config.yml`) and uploads it to GCS.
+
+Run this step any time you want to rebuild the index — for example, after step 2 has synced new docs to GCS.
+
+**Getting updated docs from GCS:** If the source docs have been updated in GCS (e.g. after running `extract_docs.py`), the script will not re-download them as long as local docs exist. To force a fresh download, delete the local docs directory before building the index again (instructions on how to do that below):
+
+```bash
+rm -rf data/ceo-docs/
+```
+
+Replace `data/ceo-docs/` with your configured `docs_path` if you changed it in `conf/base/rag_config.yml`.
+
+#### 3.1. Install dependencies
+
+The pipeline step requires additional packages (PyTorch, LangChain, sentence-transformers, etc.):
+
+```bash
+uv sync --extra pipeline
+```
+
+If you have an NVIDIA GPU and want GPU-accelerated FAISS, use `pipeline-gpu` instead:
+
+```bash
+uv sync --extra pipeline-gpu
+```
+
+> **Note on GPU PyTorch:** `pipeline-gpu` installs GPU-accelerated FAISS, but getting a CUDA-enabled PyTorch requires one extra step after `uv sync`. The command depends on your CUDA driver version — check with `nvidia-smi` (the "CUDA Version" field is the maximum your driver supports). See [pytorch.org/get-started/locally](https://pytorch.org/get-started/locally/) for the selector.
+>
+> **CUDA 13.0 or newer** — PyTorch ships CUDA-enabled wheels directly to PyPI, so no custom index is needed:
+> ```bash
+> uv pip install torch
+> ```
+>
+> **CUDA 12.8 or older** — wheels come from PyTorch's own index. Use the `cu` suffix matching your CUDA version (e.g. `cu128` for 12.8, `cu126` for 12.6, `cu118` for 11.8):
+> ```bash
+> uv pip install torch --index-url https://download.pytorch.org/whl/cu128
+> ```
+>
+> Without this step, `torch.cuda.is_available()` returns `False` even with a GPU present, and `--device auto` selects CPU.
+
+#### 3.2. Run
+
+To build the pipeline, it will run on your CPU by default, but it accepts args for other device types (See below). Run this command to build the index and upload it to GCS. The code block below **includes all commands required so far**
+
+```bash
+uv sync --extra pipeline # or pipeline-gpu instead
+# uv pip install torch --index-url https://download.pytorch.org/whl/cu128
+# uv pip install torch # For CUDA >= 13
+uv run --extra pipeline python scripts/build_index.py #--device mps|cpu|cuda
+```
+
+If there are local data stores, it will not be resynced. Remove the existing corpus before running the above command.
+
+#### Device options
+
+The `--device` flag controls which hardware runs the embedding model (the slow part).
+
+| Flag | When to use |
+|------|-------------|
+| `--device auto` | Default. Picks `cuda` if available, then `mps`, then `cpu`. |
+| `--device cpu` | Force CPU. Safe on any machine. Slowest. |
+| `--device cuda` | Force NVIDIA GPU. Requires CUDA-enabled torch (see note above). |
+| `--device mps` | Force Apple Silicon GPU (M1/M2/M3 Mac). Requires macOS 12.3+. |
+
+Example forcing CPU even on a GPU machine:
+
+```bash
+uv run --extra pipeline python scripts/build_index.py --device cpu
+```
+
+#### What to expect
+
+The script logs each phase. On a first run (no local docs) - you may see some warnings related to 'reference not found', related to upstream documents; translation wornings for missing locale files, and 'no avx2' if FAISS is not using AVX2-optimized binaries:
+
+```
+2026-04-30 12:00:01 - INFO - Using device: cuda
+2026-04-30 12:00:02 - INFO - No local docs at data/ceo-docs, downloading from GCS...
+2026-04-30 12:00:15 - INFO - Downloaded 312 files from gs://my-docs-bucket/collect-earth-online-doc/docs/source
+2026-04-30 12:04:30 - INFO - Index saved to data/vectorstores/ceo_docs_faiss
+2026-04-30 12:04:31 - INFO - Index uploaded to gs://my-db-bucket/ceo-docs-faiss/
+gs://my-db-bucket/ceo-docs-faiss/
+```
+
+On subsequent runs the docs download is skipped:
+
+```
+2026-04-30 12:00:01 - INFO - Using device: cuda
+2026-04-30 12:00:01 - INFO - Local docs found at data/ceo-docs, skipping GCS download
+...
+```
+
+The last line printed is the GCS path of the uploaded index. The index is also kept on disk at `data/vectorstores/ceo_docs_faiss/` (not tracked by git). Embedding on CPU takes 10–30 minutes; on a GPU usually under 5 minutes.
+
 <!-- Instructions below are outdated -->
 
 ### 2. Install ceo-chatbot 
