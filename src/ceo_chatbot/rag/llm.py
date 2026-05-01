@@ -122,10 +122,10 @@ class GeminiProvider(LLMProvider):
     def __init__(self, model_choices:List[str]=None, max_output_tokens: int = 8192):
         # Instantiate genai client with API key
         settings = AppSettings()
-        api_key = settings.google_api_key
+        api_key = settings.gemini_api_key
         
         if not api_key:
-            raise ValueError("GOOGLE_API_KEY not found in environment or .env file")
+            raise ValueError("GEMINI_API_KEY not found in environment or .env file")
         
         self.client = genai.Client(api_key=api_key)
         

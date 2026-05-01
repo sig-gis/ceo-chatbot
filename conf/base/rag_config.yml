@@ -2,6 +2,7 @@ embeddings:
   embedding_model_name: "google/embeddinggemma-300m"
   chunk_size: 512
   vectorstore_path: "data/vectorstores/ceo_docs_faiss"
+  vectorstore_gcs: "ceo-docs-faiss"
 
 llm:
   llm_framework: "gemini" # "huggingface"
@@ -9,3 +10,7 @@ llm:
   max_output_tokens: 8192
   prompt_file: "conf/base/prompts.yml"
 
+github:
+  repo_url: "https://github.com/openforis/collect-earth-online-doc.git"
+  ref: "main"
+  path: "docs/source"

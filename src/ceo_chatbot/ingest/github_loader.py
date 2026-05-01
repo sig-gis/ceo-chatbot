@@ -3,7 +3,7 @@ import subprocess
 from pathlib import Path
 from urllib.parse import urlparse
 from typing import Optional
-from ..config import DocumentExtractionConfig
+from ..config import RAGConfig
 
 
 class GitHubLoader:
@@ -11,7 +11,7 @@ class GitHubLoader:
     Handles cloning GitHub repositories to temporary directories for document extraction.
     """
 
-    def __init__(self, config: DocumentExtractionConfig):
+    def __init__(self, config: RAGConfig):
         self.config = config
 
     def clone(self, temp_dir: Optional[Path] = None) -> Path:

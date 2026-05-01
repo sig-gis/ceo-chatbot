@@ -14,21 +14,37 @@ def _load_yaml(path: str | Path) -> Dict[str, Any]:
         raise FileNotFoundError(f"Config file not found: {path}")
     with path.open("r") as f:
         return yaml.safe_load(f) or {}
+
 class RAGConfig(BaseModel):    
     embedding_model_name: str
     chunk_size: int = Field(gt=0, description="Chunk size must be positive")
     llm_framework: str
     model_choices: List[str]
     vectorstore_path: Path
+    vectorstore_gcs: Path
     prompt_file: Path
     max_output_tokens: int = Field(gt=1024, description="this can also be configured downstream")
-class DocumentExtractionConfig(BaseModel):
     github_repo_url: str = Field(pattern=r'^https?://', description="Must be a valid HTTP/HTTPS URL")
-    gcs_project_id: str
-    gcs_bucket_name: str
     github_ref: str = "main"
     github_path: str = ""
-    gcs_prefix: str = ""
+
+class AppSettings(BaseSettings):
+    """Loads all required environment variables"""
+    # Define fields at the top level, using aliases to map to env vars.
+
+    google_application_credentials: str = Field(..., alias='GOOGLE_APPLICATION_CREDENTIALS')
+    project_id: str = Field(...,alias='PROJECT_ID')
+    db_bucket_name: str = Field(...,alias='DB_BUCKET')
+    docs_bucket_name: str = Field(...,alias='DOCS_BUCKET')
+    folder_prefix: str = Field(...,alias='PREFIX')
+    gemini_api_key: str = Field(..., alias='GEMINI_API_KEY')
+    huggingface_token: str = Field(...,alias='HF_TOKEN')
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding='utf-8',
+        extra='ignore'
+    )
 
 def load_rag_config(
     config_path: str | Path = PROJECT_ROOT / "conf/base/rag_config.yml",
@@ -44,41 +60,20 @@ def load_rag_config(
     # Extract nested values with defaults
     embeddings = cfg.get("embeddings", {})
     llm = cfg.get("llm", {})
+    github = cfg.get("github",{})
 
     return RAGConfig(
         embedding_model_name=embeddings["embedding_model_name"],
         chunk_size=embeddings.get("chunk_size", 512),
         vectorstore_path=embeddings.get("vectorstore_path","data/vectorstores/ceo_docs_faiss"),
+        vectorstore_gcs=embeddings.get("vectorstore_gcs","ceo-docs-faiss"),
         llm_framework=llm.get("llm_framework","gemini"),
         model_choices=llm.get("model_choices",["gemini-2.5-flash"]),
         max_output_tokens=llm.get("max_output_tokens", 8192),
-        prompt_file=llm.get("prompt_file","conf/base/prompts.yml")
-    )
-    
-    return RAGConfig(**base_cfg)
-
-def load_document_extraction_config(
-    config_path: str | Path = PROJECT_ROOT / "conf/base/extract_docs_config.yml",
-) -> DocumentExtractionConfig:
-    """
-    Load the document extraction configuration from YAML to dataclass DocumentExtractionConfig.
-
-    - config_path: Path to the document extraction configuration file
-    """
-    config_path = Path(config_path)
-    cfg = _load_yaml(config_path)
-
-    # Extract nested values with defaults
-    github = cfg.get("github", {})
-    gcs = cfg.get("gcs", {})
-
-    return DocumentExtractionConfig(
+        prompt_file=llm.get("prompt_file","conf/base/prompts.yml"),
         github_repo_url=github["repo_url"],
-        github_ref=github.get("ref", "main"),
-        github_path=github.get("path", ""),
-        gcs_project_id=gcs["project_id"],
-        gcs_bucket_name=gcs["bucket_name"],
-        gcs_prefix=gcs.get("prefix", ""),
+        github_ref=github["ref"],
+        github_path=github["path"]
     )
 
 def load_prompt_template(
@@ -114,14 +109,3 @@ def load_prompt_template(
         )
 
     return template
-class AppSettings(BaseSettings):
-    """Loads all required environment variables"""
-    # Define fields at the top level, using aliases to map to env vars.
-    # This is the most robust way to load them.
-    google_api_key: str = Field(..., alias='GOOGLE_API_KEY')
-
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding='utf-8',
-        extra='ignore'
-    )

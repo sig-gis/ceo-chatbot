@@ -1,5 +1,22 @@
-# ceo-chatbot
+# CEO Chatbot
 Project setup helper (LLM chatbot) for CEO
+
+A chatbot that answers questions about Collect Earth Online by retrieving
+relevant sections from the official documentation, then having a language
+model summarize them.
+
+## What this repo does
+
+The system has three jobs that run independently:
+
+1. **Extract** - copies the latest CEO docs into a Google Cloud Storage bucket.
+   
+2. **Pipeline** - reads the docs from GCS, splits them into chunks, computes
+   numerical embeddings, and saves a searchable index back to GCS. Runs after
+   extract, or whenever you want to rebuild the index.
+3. **Chatbot** - a web service that downloads the index from GCS and answers
+   user questions by searching the index and asking Gemini to summarize the
+   matching chunks.
 
 # 🗺️ Navigating the repo
 
@@ -53,7 +70,71 @@ ceo-chatbot/
 
 # 🚀 Getting Started
 
-## 1. Clone the repo
+## What you'll need
+
+- A computer with Python 3.10 or newer
+- A Google Cloud account with access to the project (ask your team lead)
+- A Gemini API key (free at https://aistudio.google.com/apikey)
+- About 15 minutes for first-time setup
+
+Docker is optional — only needed if you want to test the deployed-image
+version of the system on your laptop before pushing to the cloud.
+
+## First-time setup
+
+### 1. Install the Google Cloud command-line tool
+
+This is for authentication for the GCS buckets.
+
+Follow the instructions for your OS here:
+https://cloud.google.com/sdk/docs/install
+
+To check it installed correctly:
+
+`gcloud --version`
+
+You should see output starting with "Google Cloud SDK".
+
+### 2. Sign in so Python can access Google Cloud
+
+Run this in your terminal:
+
+`gcloud auth application-default login`
+
+Sign in with your Google account which has access to the project in the browser window that opens.
+
+> **Important:** the words `application-default` matter. Plain
+> `gcloud auth login` only signs the command-line tool in. The
+> `application-default` version writes a credentials file that Python
+> programs can find. If you skip this you'll get a confusing
+> "DefaultCredentialsError" later.
+
+Then tell gcloud which project to use:
+
+`gcloud config set project YOUR-PROJECT-ID`
+
+### 3. Get a Gemini API key
+
+Follow your SOP or go to https://aistudio.google.com/apikey. Save this value. You'll paste it into a file in step 5.
+
+### 4. Install `uv`:
+
+macOS/Linux
+```{bash}
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+See the [uv installation docs for Windows installation instructions](https://docs.astral.sh/uv/getting-started/installation/#__tabbed_1_2)
+
+This app uses uv for dependency managment. 
+[Read more about uv in the docs.](https://docs.astral.sh/uv/getting-started/) 
+
+
+Also see [CONTRIBUTING.md](CONTRIBUTING.md) for more detail on developing with `uv` in this project.
+
+### 5. Install the project
+
+#### 5.1. Clone the repo
 
 SSH: 
 ```{bash}
@@ -65,25 +146,20 @@ HTTPS:
 git clone https://github.com/sig-gis/ceo-chatbot.git
 ```
 
-## 2. Manage dependencies with `uv`
-   
-This app uses uv for dependency managment. 
-[Read more about uv in the docs.](https://docs.astral.sh/uv/getting-started/) 
 
-### Install `uv`:
+## Running on your laptop
 
-macOS/Linux
-```{bash}
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
+(TODO — sections for `extract`, `pipeline`, and `chatbot`)
 
-See the [uv installation docs for Windows installation instructions](https://docs.astral.sh/uv/getting-started/installation/#__tabbed_1_2)
+### 1. Configure your environment
 
+Copy `.env.example` to `.env`:
+Open `.env` in any text editor and fill in the values. Each line has a
+comment explaining what it's for.
 
-Also see [CONTRIBUTING.md](CONTRIBUTING.md) for more detail on developing with `uv` in this project. 
+<!-- Instructions below are outdated -->
 
-
-## 3. Install ceo-chatbot 
+### 2. Install ceo-chatbot 
 
 Install the ceo-chatbot package locally in editable mode.
 
@@ -93,7 +169,7 @@ From the project root:
 uv pip install -e .
 ```
 
-## 4. (offline) Build vector DB
+### 3. (offline) Build vector DB
 
 For local development, the knowledge corpus must be set up one time.
 
@@ -107,13 +183,13 @@ If using a gated model such as [google/embeddinggemma-300m](https://huggingface.
 uv run hf auth login
 ```
 
-Authenticate GCloud for access to the GCS bucket specified in `conf/base/extract_docs_config.yml`
+Authenticate GCloud for access to the GCS bucket in our cloud project
 
 ```{bash}
 gcloud auth login
 ```
 
-To initially set up the CEO docs corpus or to manually re-upload updates to the GCS bucket specified in `conf/base/extract_docs_config.yml`, run the CEO docs extraction pipeline. 
+To initially set up the CEO docs corpus or to manually re-upload updates to the GCS bucket specified, run the CEO docs extraction pipeline.
 NOTE: this step is not required to reproduce the chatbot once the corpus exists in GCS. If the corpus already exists in GCS, skip to *Build the vector DB* below. 
  
 
@@ -129,10 +205,25 @@ uv run scripts/build_index.py
 
 Stay tuned! A planned future version will automate uploading the corpus to GCS and building the vector DB.
 
-## 5. Run a demo chat UI
+## Running with Docker
 
-Launch a basic streamlit application to demo `ceo-chatbot` in a chat UI. 
+TODO
 
-```{bash}
-uv run streamlit run demo/chat_app.py
-```
+<!-- ## Common errors and what they mean
+
+### `DefaultCredentialsError: Could not automatically determine credentials`
+You skipped step 2, or you ran `gcloud auth login` instead of
+`gcloud auth application-default login`. Re-run step 2 with the
+`application-default` part.
+
+### `403 Forbidden` when accessing the bucket
+Your Google account doesn't have access to the storage buckets in the
+project. Ask your team lead to grant you the **Storage Object Viewer**
+role (read-only) or **Storage Object Admin** (read-write).
+
+### `google-api-core ConnectionError`
+Your machine can't reach Google Cloud. Check your internet connection, VPN or firewall.
+
+### `ModuleNotFoundError: No module named 'ceo_chatbot'`
+You haven't installed the project yet. Run the install command in step 4
+of First-time setup. --> 
