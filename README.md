@@ -209,6 +209,18 @@ Stay tuned! A planned future version will automate uploading the corpus to GCS a
 
 TODO
 
+## Tests
+
+Run the unit tests with:
+
+```bash
+uv run pytest tests/
+```
+
+You should see all tests pass with no errors.
+
+The unit tests check that the sync logic — the rules that decide whether a file gets uploaded to Google Cloud Storage or skipped — behaves correctly for every case: a file that doesn't exist yet in GCS, a file that was touched locally but didn't actually change, a file with real changes, and a file where the remote copy is newer. These tests run without any GCS credentials or internet connection by substituting a fake GCS client, so they are safe to run anywhere and fast to run often.
+
 <!-- ## Common errors and what they mean
 
 ### `DefaultCredentialsError: Could not automatically determine credentials`
