@@ -15,11 +15,12 @@ def _load_yaml(path: str | Path) -> Dict[str, Any]:
     with path.open("r") as f:
         return yaml.safe_load(f) or {}
 
-class RAGConfig(BaseModel):    
+class RAGConfig(BaseModel):
     embedding_model_name: str
     chunk_size: int = Field(gt=0, description="Chunk size must be positive")
     llm_framework: str
     model_choices: List[str]
+    docs_path: Path
     vectorstore_path: Path
     vectorstore_gcs: Path
     prompt_file: Path
@@ -65,8 +66,9 @@ def load_rag_config(
     return RAGConfig(
         embedding_model_name=embeddings["embedding_model_name"],
         chunk_size=embeddings.get("chunk_size", 512),
-        vectorstore_path=embeddings.get("vectorstore_path","data/vectorstores/ceo_docs_faiss"),
-        vectorstore_gcs=embeddings.get("vectorstore_gcs","ceo-docs-faiss"),
+        docs_path=embeddings.get("docs_path", "data/ceo-docs"),
+        vectorstore_path=embeddings.get("vectorstore_path", "data/vectorstores/ceo_docs_faiss"),
+        vectorstore_gcs=embeddings.get("vectorstore_gcs", "ceo-docs-faiss"),
         llm_framework=llm.get("llm_framework","gemini"),
         model_choices=llm.get("model_choices",["gemini-2.5-flash"]),
         max_output_tokens=llm.get("max_output_tokens", 8192),
