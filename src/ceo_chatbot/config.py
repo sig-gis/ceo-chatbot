@@ -41,10 +41,25 @@ class AppSettings(BaseSettings):
     gemini_api_key: str = Field(..., alias='GEMINI_API_KEY')
     huggingface_token: str = Field(...,alias='HF_TOKEN')
 
+    # This tells BaseSettings where to find the above fields.
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding='utf-8',
         extra='ignore'
+    )
+
+class GeminiInferenceSettings(BaseSettings):
+    """Env vars required for inference only (chatbot service).
+
+    Kept separate from AppSettings so the chatbot container does not need
+    pipeline-specific variables (DB_BUCKET, DOCS_BUCKET, PREFIX, HF_TOKEN).
+    """
+    gemini_api_key: str = Field(..., alias='GEMINI_API_KEY')
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
     )
 
 def load_rag_config(
