@@ -7,7 +7,7 @@ from ceo_chatbot.embeddings import get_embedding_model
 
 def load_faiss_index(
     index_dir: Path,
-    embedding_model_name: str = "thenlper/gte-small",
+    embedding_model_name: str = "google/embeddinggemma-300m",
 ) -> FAISS:
     """
     Load a FAISS index from disk with a compatible embedding model.

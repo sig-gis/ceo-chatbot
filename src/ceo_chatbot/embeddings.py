@@ -13,7 +13,7 @@ import torch
 
 
 def get_embedding_model(
-    embedding_model_name: str = "thenlper/gte-small",
+    embedding_model_name: str = "google/embeddinggemma-300m",
     multi_process: bool = False,
     device: str | None = None,
 ) -> HuggingFaceEmbeddings:
