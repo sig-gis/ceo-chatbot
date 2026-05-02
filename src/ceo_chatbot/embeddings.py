@@ -1,3 +1,13 @@
+"""Shared embedding model loader.
+
+Lives at the package root because it's used by both:
+  - ingest/index_builder.py (at index-build time)
+  - rag/retriever.py        (at query time)
+
+It must not live inside ingest/ or rag/, because doing so would force
+either service's Docker image to import the other service's package
+tree just to load the embedding model.
+"""
 from langchain_huggingface import HuggingFaceEmbeddings
 import torch
 

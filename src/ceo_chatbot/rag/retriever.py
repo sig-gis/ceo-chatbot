@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Callable, List
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document as LangchainDocument
-from ceo_chatbot.ingest.embeddings import get_embedding_model
+from ceo_chatbot.embeddings import get_embedding_model
 
 
 def load_faiss_index(

@@ -6,7 +6,7 @@ from langchain_core.documents import Document as LangchainDocument
 
 from ceo_chatbot.ingest.loaders import load_rst_docs
 from ceo_chatbot.ingest.chunking import semantic_recursive_chunks
-from ceo_chatbot.ingest.embeddings import get_embedding_model
+from ceo_chatbot.embeddings import get_embedding_model
 from ceo_chatbot.ingest.gcs_uploader import GCSHandler
 from ceo_chatbot.config import load_rag_config, AppSettings
 

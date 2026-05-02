@@ -1,5 +1,5 @@
 from ceo_chatbot.rag.retriever import load_faiss_index, get_retriever
-from ceo_chatbot.ingest.embeddings import get_embedding_model
+from ceo_chatbot.embeddings import get_embedding_model
 from ceo_chatbot.config import load_rag_config, load_prompt_template
 
 config = load_rag_config("conf/base/rag_config.yml")
