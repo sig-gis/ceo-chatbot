@@ -140,17 +140,17 @@ class GeminiProvider(LLMProvider):
         self._max_context = 1000000
         self.max_output_tokens = max_output_tokens
 
-    def _validate_model_choices(self) -> List[str]:
-        model_pager = self.client.models.list(config={'page_size':5})
-        available_models = []
-        for model_page in model_pager:
-                model_name = model_page.name.strip('models/')
-                available_models.extend([model_name])
-        valid_models = [True for m in self.model_choices if m in available_models]
-        if all(valid_models):
-            return
-        else:
-            raise ValueError(f"{self.model_choices} not in list of availabe models ({available_models})")
+    def _validate_model_choices(self) -> None:
+        """Check each configured model exists with one API call per model.
+
+        Logs a warning for any model that cannot be found. Does not raise —
+        generate() skips unavailable models via its fallback chain.
+        """
+        for model in self.model_choices:
+            try:
+                self.client.models.get(model=f"models/{model}")
+            except Exception as e:
+                logging.warning(f"Model {model} not found or not accessible: {e}")
     
     def generate(self, prompt: str, **kwargs) -> str:
         # Allow kwargs to override default max_output_tokens
