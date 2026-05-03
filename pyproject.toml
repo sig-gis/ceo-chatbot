@@ -7,7 +7,7 @@ name = "ceo-chatbot"
 version = "0.1.0"
 description = "A project that syncs CEO documentation, builds a vector db from it, and runs a chatbot over the vector db"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.0.0",
     "pydantic-settings>=2.12.0",
