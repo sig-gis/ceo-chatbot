@@ -258,6 +258,7 @@ chatbot = [
     { name = "numpy" },
     { name = "sentence-transformers" },
     { name = "torch" },
+    { name = "transformers" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 pipeline = [
@@ -326,6 +327,7 @@ requires-dist = [
     { name = "torch", marker = "extra == 'chatbot'", specifier = ">=2.9.1" },
     { name = "torch", marker = "extra == 'pipeline'", specifier = ">=2.9.1" },
     { name = "torch", marker = "extra == 'pipeline-gpu'", specifier = ">=2.9.1" },
+    { name = "transformers", marker = "extra == 'chatbot'", specifier = ">=4.57.1" },
     { name = "transformers", marker = "extra == 'pipeline'", specifier = ">=4.57.1" },
     { name = "transformers", marker = "extra == 'pipeline-gpu'", specifier = ">=4.57.1" },
     { name = "unstructured", extras = ["rst"], marker = "extra == 'pipeline'", specifier = ">=0.18.21" },
