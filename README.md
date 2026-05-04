@@ -77,7 +77,7 @@ ceo-chatbot/
 - A Gemini API key (free at https://aistudio.google.com/apikey)
 - About 15 minutes for first-time setup
 
-Docker is optional — only needed if you want to test the deployed-image
+Docker is optional - only needed if you want to test the deployed-image
 version of the system on your laptop before pushing to the cloud.
 
 ## First-time setup
@@ -184,7 +184,7 @@ This command converts the source docs into a FAISS vector index that the chatbot
 1. **Docs**: checks `data/ceo-docs/` (configurable via `docs_path` in `conf/base/rag_config.yml`) for existing RST files. If found, uses them. If not, downloads them from GCS first.
 2. **Index**: loads the docs, splits them into chunks, embeds each chunk using a HuggingFace model, and builds a FAISS index. Saves the result to `data/vectorstores/ceo_docs_faiss/` (configurable via `vectorstore_path` in `conf/base/rag_config.yml`) and uploads it to GCS.
 
-Run this step any time you want to rebuild the index — for example, after step 2 has synced new docs to GCS.
+Run this step any time you want to rebuild the index - for example, after step 2 has synced new docs to GCS.
 
 **Getting updated docs from GCS:** If the source docs have been updated in GCS (e.g. after running `extract_docs.py`), the script will not re-download them as long as local docs exist. To force a fresh download, delete the local docs directory before building the index again (instructions on how to do that below):
 
@@ -208,14 +208,14 @@ If you have an NVIDIA GPU and want GPU-accelerated FAISS, use `pipeline-gpu` ins
 uv sync --extra pipeline-gpu
 ```
 
-> **Note on GPU PyTorch:** `pipeline-gpu` installs GPU-accelerated FAISS, but getting a CUDA-enabled PyTorch requires one extra step after `uv sync`. The command depends on your CUDA driver version — check with `nvidia-smi` (the "CUDA Version" field is the maximum your driver supports). See [pytorch.org/get-started/locally](https://pytorch.org/get-started/locally/) for the selector.
+> **Note on GPU PyTorch:** `pipeline-gpu` installs GPU-accelerated FAISS, but getting a CUDA-enabled PyTorch requires one extra step after `uv sync`. The command depends on your CUDA driver version - check with `nvidia-smi` (the "CUDA Version" field is the maximum your driver supports). See [pytorch.org/get-started/locally](https://pytorch.org/get-started/locally/) for the selector.
 >
-> **CUDA 13.0 or newer** — PyTorch ships CUDA-enabled wheels directly to PyPI, so no custom index is needed:
+> **CUDA 13.0 or newer** - PyTorch ships CUDA-enabled wheels directly to PyPI, so no custom index is needed:
 > ```bash
 > uv pip install torch
 > ```
 >
-> **CUDA 12.8 or older** — wheels come from PyTorch's own index. Use the `cu` suffix matching your CUDA version (e.g. `cu128` for 12.8, `cu126` for 12.6, `cu118` for 11.8):
+> **CUDA 12.8 or older** - wheels come from PyTorch's own index. Use the `cu` suffix matching your CUDA version (e.g. `cu128` for 12.8, `cu126` for 12.6, `cu118` for 11.8):
 > ```bash
 > uv pip install torch --index-url https://download.pytorch.org/whl/cu128
 > ```
@@ -325,7 +325,101 @@ Stay tuned! A planned future version will automate uploading the corpus to GCS a
 
 ## Running with Docker
 
-TODO
+### Build the image
+
+From the project root:
+
+```bash
+docker build -f Dockerfile.chatbot -t ceo-chatbot:latest .
+```
+
+The build takes a few minutes the first time while it downloads and installs PyTorch, sentence-transformers, and the other dependencies. Subsequent builds reuse cached layers - only the changed layers rebuild.
+
+### Run the container
+
+The container reads its configuration from your existing `.env` file - the same one you use for local development. Make sure it contains these keys:
+
+```
+GEMINI_API_KEY=...
+DB_BUCKET=...
+GCP_PROJECT_ID=...
+HF_TOKEN=...
+```
+
+In addition, the container needs your Google Cloud credentials so it can download the FAISS index from GCS. An earlier step - `gcloud auth application-default login` - creates some application credentials in `~/.config/gcloud/application_default_credentials.json`. The easiest way to supply your credentials is to bind-mount this file to `/gcp/adc.json`, and then point the container at it with `GOOGLE_APPLICATION_CREDENTIALS`.
+
+**Linux / macOS:**
+
+```bash
+docker run --rm \
+  -p 8080:8080 \
+  --env-file .env \
+  -v "$HOME/.config/gcloud/application_default_credentials.json:/gcp/adc.json:ro" \
+  -e GOOGLE_APPLICATION_CREDENTIALS=/gcp/adc.json \
+  ceo-chatbot:latest
+```
+
+**Windows (PowerShell):**
+
+```powershell
+docker run --rm `
+  -p 8080:8080 `
+  --env-file .env `
+  -v "$env:APPDATA\gcloud\application_default_credentials.json:/gcp/adc.json:ro" `
+  -e GOOGLE_APPLICATION_CREDENTIALS=/gcp/adc.json `
+  ceo-chatbot:latest
+```
+
+`--env-file` injects every variable from `.env` without exposing secrets in your shell history or in `docker inspect` output.
+
+> **Note on Cloud Run:** when deploying to Cloud Run you do not use > `docker run`. Environment variables are set in the service configuration, and secrets (`GEMINI_API_KEY`, `HF_TOKEN`) should be stored in GCP Secret Manager and referenced from there rather than passed as plain env vars.
+
+The container downloads the FAISS index from GCS on startup (this takes a few seconds). Once it is ready, you will see a log line like:
+
+```
+INFO:app.lifespan:chatbot ready in 8.3s
+```
+
+### Check it is running
+
+```bash
+curl http://localhost:8080/healthz
+```
+
+You should see:
+
+```json
+{"status": "ready"}
+```
+
+If you see `{"status": "loading"}` with HTTP 503, the index is still downloading - wait a moment and try again.
+
+
+### Common errors
+
+**`DefaultCredentialsError` in container logs**
+
+The container cannot find Google Cloud credentials. Make sure you included the
+`-v` and `-e GOOGLE_APPLICATION_CREDENTIALS` flags shown above. On Linux the
+ADC file is at `~/.config/gcloud/application_default_credentials.json`; on
+macOS it may be at the same path or under `~/Library/Application Support`.
+Run `gcloud auth application-default login` on your laptop first if the file
+does not exist.
+
+**`403 Forbidden` when downloading the index**
+
+Your credentials are valid but the service account or user does not have
+read access to the GCS bucket. Ask your team lead to grant the
+**Storage Object Viewer** role on the bucket.
+
+**`/healthz` returns 503 indefinitely**
+
+The lifespan failed to finish. Check the container logs with
+`docker logs <container-id>` for the underlying error (usually a credentials
+or bucket-name problem).
+
+**`google-api-core ConnectionError`**
+Your machine can't reach Google Cloud. Check your internet connection, VPN or firewall.
 
 ## Tests
 
@@ -337,23 +431,4 @@ uv run pytest tests/
 
 You should see all tests pass with no errors.
 
-The unit tests check that the sync logic — the rules that decide whether a file gets uploaded to Google Cloud Storage or skipped — behaves correctly for every case: a file that doesn't exist yet in GCS, a file that was touched locally but didn't actually change, a file with real changes, and a file where the remote copy is newer. These tests run without any GCS credentials or internet connection by substituting a fake GCS client, so they are safe to run anywhere and fast to run often.
-
-<!-- ## Common errors and what they mean
-
-### `DefaultCredentialsError: Could not automatically determine credentials`
-You skipped step 2, or you ran `gcloud auth login` instead of
-`gcloud auth application-default login`. Re-run step 2 with the
-`application-default` part.
-
-### `403 Forbidden` when accessing the bucket
-Your Google account doesn't have access to the storage buckets in the
-project. Ask your team lead to grant you the **Storage Object Viewer**
-role (read-only) or **Storage Object Admin** (read-write).
-
-### `google-api-core ConnectionError`
-Your machine can't reach Google Cloud. Check your internet connection, VPN or firewall.
-
-### `ModuleNotFoundError: No module named 'ceo_chatbot'`
-You haven't installed the project yet. Run the install command in step 4
-of First-time setup. --> 
+The unit tests check that the sync logic - the rules that decide whether a file gets uploaded to Google Cloud Storage or skipped - behaves correctly for every case: a file that doesn't exist yet in GCS, a file that was touched locally but didn't actually change, a file with real changes, and a file where the remote copy is newer. These tests run without any GCS credentials or internet connection by substituting a fake GCS client, so they are safe to run anywhere and fast to run often.
