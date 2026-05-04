@@ -1,0 +1,107 @@
+# syntax=docker/dockerfile:1
+#
+# Dockerfile.chatbot — CEO Chatbot FastAPI service
+#
+# Two-stage build:
+#   builder  — installs the virtual environment with uv
+#   runtime  — lean image that copies only the venv and the files it needs
+#
+# Env vars required at RUNtime:
+#   GEMINI_API_KEY        Gemini API key
+#   DB_BUCKET             GCS bucket that holds the FAISS index
+#   GCP_PROJECT_ID            GCP project ID (storage.Client() cannot infer this
+#                         from user ADC credentials; service accounts are fine)
+#   HF_TOKEN              HuggingFace token — required for gated embedding models
+#                         (e.g. google/embeddinggemma-300m). Read automatically
+#                         by huggingface_hub; declared here for validation.
+# Optional:
+#   INDEX_LOCAL_DIR              Where to download the index (default /tmp/ceo-chatbot-index)
+#   LOG_LEVEL                    Python log level (default INFO)
+#   GOOGLE_APPLICATION_CREDENTIALS  Path to ADC key file (bind-mount it in)
+
+# ── Stage 1: builder ─────────────────────────────────────────────────────────
+
+FROM ghcr.io/astral-sh/uv:0.11.6 AS uv
+
+FROM python:3.12-slim AS builder
+
+COPY --from=uv /uv /uvx /bin/
+
+WORKDIR /app
+
+# UV_COMPILE_BYTECODE: compile .py → .pyc at install time so the runtime
+#   image skips recompilation on every cold start.
+# UV_LINK_MODE=copy: required in Docker because the cache mount lives on a
+#   different filesystem from the install target; hard links don't cross
+#   filesystem boundaries.
+ENV UV_COMPILE_BYTECODE=1
+ENV UV_LINK_MODE=copy
+
+# Step 1 — install dependencies, but not the project itself.
+#
+# The bind mounts make pyproject.toml and uv.lock available to uv without
+# adding them to the layer. This layer is cached and only rebuilds when
+# either file changes — source code edits don't invalidate it.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --extra chatbot --no-install-project --frozen
+
+# Step 2 — copy source and install the project package.
+#
+# Kept in a separate layer so dependency installation (slow, gigabytes) is
+# only re-run when the lockfile changes, not on every source edit.
+#
+# ingest/ is excluded from the build context via .dockerignore — only the
+# packages the chatbot imports are present.
+COPY pyproject.toml uv.lock ./
+COPY src/ src/
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --extra chatbot --frozen
+
+# ── Stage 2: runtime ─────────────────────────────────────────────────────────
+
+FROM python:3.12-slim AS runtime
+
+WORKDIR /app
+
+# Copy the complete virtual environment built in stage 1.
+COPY --from=builder /app/.venv /app/.venv
+
+# src/ is required because uv installs the project in editable mode by
+# default. The .venv contains a .pth file that adds /app/src to sys.path,
+# so Python loads ceo_chatbot from this directory. ingest/ is excluded via
+# .dockerignore — the chatbot never imports it.
+COPY src/ src/
+
+# conf/ holds the YAML files loaded at startup (rag_config.yml, prompts.yml).
+# config.py resolves their paths via Path(__file__).parents[2] which is /app
+# under the editable install — this is why /app must be the WORKDIR.
+COPY conf/ conf/
+
+# FastAPI application code.
+COPY app/ app/
+
+# Make the venv's executables (python, uvicorn) available without a prefix.
+ENV PATH="/app/.venv/bin:$PATH"
+
+# Prevents Python from buffering stdout/stderr. Cloud Run captures logs by
+# reading those streams; buffering causes log lines to be lost if the
+# process is killed mid-buffer.
+ENV PYTHONUNBUFFERED=1
+
+EXPOSE 8080
+
+# /healthz returns 200 once the lifespan has finished downloading the FAISS
+# index from GCS and loading the embedding model. start-period accounts for
+# that download; without it Docker marks the container unhealthy during
+# normal boot and may restart it unnecessarily.
+#
+# Uses Python's built-in urllib rather than curl because python:3.12-slim
+# does not include curl.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=6 \
+    CMD python -c \
+        "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')" \
+        || exit 1
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]

@@ -1,0 +1,49 @@
+# Version control
+.git
+.gitignore
+
+# Python build artifacts
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.egg-info
+.pytest_cache
+.ruff_cache
+.mypy_cache
+
+# Virtual environment (uv recreates it inside the image)
+.venv
+venv
+
+# Project data — large files, not needed in the image
+data/
+
+# Pipeline-only source code — the chatbot never imports ceo_chatbot.ingest.
+# Excluding it keeps the image smaller and enforces the architectural boundary.
+src/ceo_chatbot/ingest/
+
+# Development tooling and notebooks
+tests/
+notebooks/
+demo/
+docs/
+
+# Scripts are run on the host, not inside the container
+scripts/
+
+# Secrets — never bake credentials into the image
+.env
+.env.*
+*.env
+
+# Editor and OS noise
+.DS_Store
+*.swp
+*.swo
+
+# Unused root files
+*.md
+CONTRIBUTING*
+CLAUDE.md
+conf/local/
