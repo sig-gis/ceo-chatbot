@@ -10,8 +10,8 @@ logger = logging.getLogger(__name__)
 class GCSStorage:
     """Thin wrapper around google-cloud-storage for this project's access patterns."""
 
-    def __init__(self, bucket_name: str) -> None:
-        self._client = storage.Client()
+    def __init__(self, bucket_name: str, project: str | None = None) -> None:
+        self._client = storage.Client(project=project)
         self._bucket = self._client.bucket(bucket_name)
 
     def sync_up(self, local_dir: Path, remote_prefix: str) -> dict:

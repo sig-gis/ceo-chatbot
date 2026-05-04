@@ -34,7 +34,7 @@ class AppSettings(BaseSettings):
     # Define fields at the top level, using aliases to map to env vars.
 
     google_application_credentials: str = Field(..., alias='GOOGLE_APPLICATION_CREDENTIALS')
-    project_id: str = Field(...,alias='PROJECT_ID')
+    gcp_project_id: str = Field(...,alias='GCP_PROJECT_ID')
     db_bucket_name: str = Field(...,alias='DB_BUCKET')
     docs_bucket_name: str = Field(...,alias='DOCS_BUCKET')
     folder_prefix: str = Field(...,alias='PREFIX')

@@ -19,6 +19,16 @@ class Settings(BaseSettings):
     # (same bucket as DB_BUCKET used by the pipeline)
     gcs_bucket_index: str = Field(..., alias="DB_BUCKET")
 
+    # GCP project ID. storage.Client() requires this; it cannot be inferred
+    # from user ADC credentials (only service-account keys embed a project).
+    google_cloud_project: str = Field(..., alias="GCP_PROJECT_ID")
+
+    # HuggingFace token. Required for gated models (e.g. google/embeddinggemma-300m
+    # requires accepting Google's terms on HuggingFace). The huggingface_hub
+    # library reads HF_TOKEN from the environment automatically — this field
+    # exists to document the requirement and surface a clear error if it is missing.
+    hf_token: str = Field(..., alias="HF_TOKEN")
+
     # Local directory to download the index into on startup
     index_local_dir: Path = Field(default=Path("/tmp/ceo-chatbot-index"), alias="INDEX_LOCAL_DIR")
 
