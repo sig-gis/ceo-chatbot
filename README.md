@@ -394,6 +394,34 @@ You should see:
 
 If you see `{"status": "loading"}` with HTTP 503, the index is still downloading - wait a moment and try again.
 
+You can also visit http://localhost:8080/docs to see the current API and schemas.
+
+### Sample Query:
+Ask the RAG system "What is CEO?". Below is a curl request with appropriate headers hitting the port exposed locally in the `docker run` command.
+```{bash}
+curl -X 'POST' \
+  'http://localhost:8080/chat' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "query": "What is CEO?",
+  "history": []
+}'
+```
+Sample response, which returns the answer as well as all cited sources:
+```{bash}
+{
+  "answer": "[CEO](https://collect-earth-online-doc.readthedocs.io/en/latest/index.html) enables users to efficiently collect up-to-date information about their environment and observe changes over time. Users can learn how to [collect data in CEO](https://collect-earth-online-doc.readthedocs.io/en/latest/index.html), [manage an institution](https://collect-earth-online-doc.readthedocs.io/en/latest/index.html), or [create a project](https://collect-earth-online-doc.readthedocs.io/en/latest/index.html). To get started, users can [register for CEO](https://collect-earth-online-doc.readthedocs.io/en/latest/index.html) and set up their Collect Earth Online account.",
+  "sources": [
+    "https://collect-earth-online-doc.readthedocs.io/en/latest/index.html",
+    "https://collect-earth-online-doc.readthedocs.io/en/latest/index.html",
+    "https://collect-earth-online-doc.readthedocs.io/en/latest/setup/register.html",
+    "https://collect-earth-online-doc.readthedocs.io/en/latest/index.html",
+    "https://collect-earth-online-doc.readthedocs.io/en/latest/institution/imagery.html"
+  ]
+}
+```
+
 
 ### Common errors
 
