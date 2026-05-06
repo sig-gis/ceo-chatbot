@@ -5,15 +5,9 @@ from pathlib import Path
 from typing import Any, Dict, List
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from ceo_chatbot_core.yaml_utils import load_yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-
-def _load_yaml(path: str | Path) -> Dict[str, Any]:
-    path = Path(path)
-    if not path.exists():
-        raise FileNotFoundError(f"Config file not found: {path}")
-    with path.open("r") as f:
-        return yaml.safe_load(f) or {}
 
 class RAGConfig(BaseModel):
     embedding_model_name: str
@@ -71,7 +65,7 @@ def load_rag_config(
     - base_path: Path(conf/base/rag_config.yml)
     """
     config_path = Path(config_path)
-    cfg = _load_yaml(config_path)
+    cfg = load_yaml(config_path)
 
     # Extract nested values with defaults
     embeddings = cfg.get("embeddings", {})
@@ -110,7 +104,7 @@ def load_prompt_template(
     """
     prompt_file = PROJECT_ROOT / prompt_file
     path = Path(prompt_file)
-    data = _load_yaml(path)
+    data = load_yaml(path)
 
     if prompt_key not in data:
         available = ", ".join(sorted(data.keys()))
