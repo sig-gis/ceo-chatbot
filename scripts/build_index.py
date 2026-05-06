@@ -8,7 +8,7 @@ from ceo_chatbot.config import AppSettings, load_rag_config
 from ceo_chatbot.ingest.chunking import semantic_recursive_chunks
 from ceo_chatbot.ingest.index_builder import build_faiss_index
 from ceo_chatbot.ingest.loaders import load_rst_docs
-from ceo_chatbot.storage import GCSStorage
+from ceo_chatbot_core.storage import GCSStorage
 
 
 def _resolve_device(device: str) -> str:

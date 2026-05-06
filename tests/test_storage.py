@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
-from ceo_chatbot.storage import GCSStorage
+from ceo_chatbot_core.storage import GCSStorage
 
 
 def _make_store(mock_client_cls, bucket_name="test-bucket"):
@@ -29,7 +29,7 @@ def _make_blob(*, exists, size, remote_updated_offset_hours):
     return blob
 
 
-@patch("ceo_chatbot.storage.storage.Client")
+@patch("ceo_chatbot_core.storage.storage.Client")
 def test_sync_up_uploads_when_blob_missing(mock_client_cls, tmp_path):
     """Test that sync_up uploads a file when the remote blob does not exist."""
     # Set up mock storage with a mocked client
@@ -49,7 +49,7 @@ def test_sync_up_uploads_when_blob_missing(mock_client_cls, tmp_path):
     assert result == {"uploaded": 1, "skipped": 0, "total": 1}
 
 
-@patch("ceo_chatbot.storage.storage.Client")
+@patch("ceo_chatbot_core.storage.storage.Client")
 def test_sync_up_skips_when_size_equal_and_local_newer(mock_client_cls, tmp_path):
     """Test that sync_up skips a file when sizes match and local file is newer."""
     # Set up mock storage
@@ -69,7 +69,7 @@ def test_sync_up_skips_when_size_equal_and_local_newer(mock_client_cls, tmp_path
     assert result == {"uploaded": 0, "skipped": 1, "total": 1}
 
 
-@patch("ceo_chatbot.storage.storage.Client")
+@patch("ceo_chatbot_core.storage.storage.Client")
 def test_sync_up_uploads_when_size_differs(mock_client_cls, tmp_path):
     """Test that sync_up uploads a file when sizes differ between local and remote."""
     # Set up mock storage
@@ -89,7 +89,7 @@ def test_sync_up_uploads_when_size_differs(mock_client_cls, tmp_path):
     assert result == {"uploaded": 1, "skipped": 0, "total": 1}
 
 
-@patch("ceo_chatbot.storage.storage.Client")
+@patch("ceo_chatbot_core.storage.storage.Client")
 def test_sync_up_skips_when_local_older(mock_client_cls, tmp_path):
     """Test that sync_up skips a file when the local version is older than remote."""
     # Set up mock storage
@@ -109,7 +109,7 @@ def test_sync_up_skips_when_local_older(mock_client_cls, tmp_path):
     assert result == {"uploaded": 0, "skipped": 1, "total": 1}
 
 
-@patch("ceo_chatbot.storage.storage.Client")
+@patch("ceo_chatbot_core.storage.storage.Client")
 def test_sync_up_returns_correct_counts(mock_client_cls, tmp_path):
     """Test that sync_up returns correct counts when syncing multiple files with different conditions."""
     # Set up mock storage

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from ceo_chatbot.config import AppSettings, load_rag_config
 from ceo_chatbot.ingest.github_loader import GitHubLoader
-from ceo_chatbot.storage import GCSStorage
+from ceo_chatbot_core.storage import GCSStorage
 
 
 def main():

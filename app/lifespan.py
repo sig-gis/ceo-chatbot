@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from ceo_chatbot.config import load_rag_config
 from ceo_chatbot.rag.pipeline import RagService
 from ceo_chatbot.rag.retriever import get_retriever, load_faiss_index
-from ceo_chatbot.storage import GCSStorage
+from ceo_chatbot_core.storage import GCSStorage
 from app.settings import get_settings
 
 
