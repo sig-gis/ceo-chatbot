@@ -74,3 +74,9 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "."]
+
+[tool.uv.workspace]
+members = [
+    "packages/ceo_chatbot_core",
+    "services/ceo_ingest_docs",
+]
