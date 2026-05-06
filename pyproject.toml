@@ -13,7 +13,11 @@ dependencies = [
     "pydantic-settings>=2.12.0",
     "pyyaml",
     "google-cloud-storage>=2.18.0",
+    "ceo_chatbot_core"
 ]
+
+[tool.uv.sources]
+ceo_chatbot_core = { workspace = true}
 
 [project.optional-dependencies]
 # Packages for document syncing with GCS

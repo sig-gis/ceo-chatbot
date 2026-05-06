@@ -6,6 +6,13 @@ resolution-markers = [
     "python_full_version < '3.13'",
 ]
 
+[manifest]
+members = [
+    "ceo-chatbot",
+    "ceo-chatbot-core",
+    "ceo-ingest-docs",
+]
+
 [[package]]
 name = "accelerate"
 version = "1.11.0"
@@ -241,6 +248,7 @@ name = "ceo-chatbot"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "ceo-chatbot-core" },
     { name = "google-cloud-storage" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -300,6 +308,7 @@ requires-dist = [
     { name = "accelerate", marker = "extra == 'pipeline'", specifier = ">=1.11.0" },
     { name = "accelerate", marker = "extra == 'pipeline-gpu'", specifier = ">=1.11.0" },
     { name = "bitsandbytes", marker = "extra == 'pipeline-gpu'", specifier = ">=0.48.2" },
+    { name = "ceo-chatbot-core", editable = "packages/ceo_chatbot_core" },
     { name = "faiss-cpu", marker = "extra == 'chatbot'", specifier = ">=1.7.4" },
     { name = "faiss-cpu", marker = "extra == 'pipeline'", specifier = ">=1.7.4" },
     { name = "faiss-gpu-cu12", marker = "extra == 'pipeline-gpu'", specifier = ">=1.13.0" },
@@ -343,6 +352,26 @@ dev = [
     { name = "pytest-mock", specifier = ">=3.12" },
     { name = "uv", specifier = ">=0.9.7" },
 ]
+
+[[package]]
+name = "ceo-chatbot-core"
+version = "0.1.0"
+source = { editable = "packages/ceo_chatbot_core" }
+dependencies = [
+    { name = "google-cloud-storage" },
+    { name = "pyyaml" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "google-cloud-storage", specifier = ">=2.18.0" },
+    { name = "pyyaml" },
+]
+
+[[package]]
+name = "ceo-ingest-docs"
+version = "0.1.0"
+source = { editable = "services/ceo_ingest_docs" }
 
 [[package]]
 name = "certifi"
