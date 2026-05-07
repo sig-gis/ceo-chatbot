@@ -1,13 +1,23 @@
 [project]
 name = "ceo-rag-chatbot"
 version = "0.1.0"
-description = "Add your description here"
+description = "The FastAPI server and RAG chatbot. Running this will start the FastAPI server and the chatbot over the RAG db"
 readme = "README.md"
 authors = [
     { name = "Arif Syraj", email = "126988341+arif-syr@users.noreply.github.com" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "uvicorn",
+    "fastapi",
+    "ceo_chatbot_core"
+]
+
+[tool.uv.sources]
+ceo_chatbot_core = {workspace = true}
+
+[project.scripts]
+ingest-docs = "ceo_rag_chatbot.main:run"
 
 [build-system]
 requires = ["uv_build>=0.11.6,<0.12.0"]
