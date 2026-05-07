@@ -1,0 +1,20 @@
+[project]
+name = "ceo-build-index"
+version = "0.1.0"
+description = "Service to build a FAISS index from the CEO document store"
+readme = "README.md"
+authors = [
+    { name = "Arif Syraj", email = "126988341+arif-syr@users.noreply.github.com" }
+]
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.uv.sources]
+ceo_chatbot_core = {workspace = true}
+
+[project.scripts]
+ingest-docs = "ceo_ingest_docs.main:main"
+
+[build-system]
+requires = ["uv_build>=0.11.6,<0.12.0"]
+build-backend = "uv_build"

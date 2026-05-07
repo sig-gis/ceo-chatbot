@@ -20,6 +20,7 @@ dependencies = [
 members = [
     "packages/ceo_chatbot_core",
     "services/ceo_ingest_docs",
+    "services/ceo_build_index",
 ]
 
 [tool.uv.sources]
