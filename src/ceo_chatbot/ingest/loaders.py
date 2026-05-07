@@ -49,31 +49,3 @@ def load_rst_docs(docs_dir: str = "data/ceo-docs") -> List[LangchainDocument]:
         rst_docs.extend(elements)
         
     return rst_docs
-
-def sync_ceo_docs(output_dir:str= "data/ceo-docs") -> Path:
-    """
-    Sync local CEO docs data (at `output_dir`) with snapshot of it on the GCS bucket
-    """
-    
-    app_settings = AppSettings()
-    print(f"Syncing CEO docs from gs://{app_settings.docs_bucket_name}/{app_settings.folder_prefix}")
-    
-    if not Path(output_dir).exists():
-        print(f"Creating path '{output_dir}'")
-        Path(output_dir).mkdir(exist_ok=True)
-    
-    # Determine the GCS source
-    gcs_path = f"gs://{app_settings.docs_bucket_name}"
-    gcs_prefix = app_settings.folder_prefix
-    if gcs_prefix:
-        gcs_path += f"/{gcs_prefix}"
-
-    # rsync should allow for version syncing bw local and gcs
-    cmd = ["gsutil", "-m","rsync", "-r", gcs_path, str(output_dir)]
-    try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True)
-    except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"Failed to upload to GCS: {e.stderr}") from e
-    
-    return Path(output_dir)
-
