@@ -17,7 +17,7 @@ dependencies = [
 ceo_chatbot_core = {workspace = true}
 
 [project.scripts]
-ingest-docs = "ceo_rag_chatbot.main:run"
+chatbot = "ceo_rag_chatbot.main:run"
 
 [build-system]
 requires = ["uv_build>=0.11.6,<0.12.0"]
