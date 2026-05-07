@@ -16,8 +16,14 @@ dependencies = [
     "ceo_chatbot_core"
 ]
 
+[tool.uv.workspace]
+members = [
+    "packages/ceo_chatbot_core",
+    "services/ceo_ingest_docs",
+]
+
 [tool.uv.sources]
-ceo_chatbot_core = { workspace = true}
+ceo_chatbot_core = {workspace = true}
 
 [project.optional-dependencies]
 # Packages for document syncing with GCS
@@ -78,9 +84,3 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "."]
-
-[tool.uv.workspace]
-members = [
-    "packages/ceo_chatbot_core",
-    "services/ceo_ingest_docs",
-]
