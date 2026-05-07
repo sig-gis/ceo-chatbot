@@ -3,8 +3,9 @@ import sys
 import tempfile
 from pathlib import Path
 
-from ceo_chatbot.config import AppSettings, load_rag_config
-from ceo_chatbot.ingest.github_loader import GitHubLoader
+from ceo_ingest_docs.config import load_ingestion_config
+from ceo_ingest_docs.settings import IngestionSettings
+from ceo_ingest_docs.github_loader import GitHubLoader
 from ceo_chatbot_core.storage import GCSStorage
 
 
@@ -17,10 +18,10 @@ def main():
 
     try:
         # Load configuration
-        config = load_rag_config()
-        logging.info(f"Loaded configuration for GitHub repo: {config.github_repo_url}")
+        config = load_ingestion_config("conf/base/rag_config.yml")
+        logging.info(f"Loaded configuration for GitHub repo: {config.repo_url}")
 
-        settings = AppSettings()
+        settings = IngestionSettings()
         bucket_name = settings.docs_bucket_name
         prefix = settings.folder_prefix
 
