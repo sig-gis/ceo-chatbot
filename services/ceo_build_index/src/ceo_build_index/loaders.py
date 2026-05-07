@@ -1,11 +1,8 @@
 from typing import List
 from langchain_community.document_loaders import rst
 from langchain_core.documents import Document as LangchainDocument
-import subprocess
 from pathlib import Path
 import glob
-
-from ceo_chatbot.config import AppSettings
 
 def load_rst_docs(docs_dir: str = "data/ceo-docs") -> List[LangchainDocument]:
     """

@@ -4,10 +4,11 @@ from pathlib import Path
 
 import torch
 
-from ceo_chatbot.config import AppSettings, load_rag_config
-from ceo_chatbot.ingest.chunking import semantic_recursive_chunks
-from ceo_chatbot.ingest.index_builder import build_faiss_index
-from ceo_chatbot.ingest.loaders import load_rst_docs
+from ceo_build_index.config import load_rag_config
+from ceo_build_index.settings import get_settings
+from ceo_build_index.chunking import semantic_recursive_chunks
+from ceo_build_index.index_builder import build_faiss_index
+from ceo_build_index.loaders import load_rst_docs
 from ceo_chatbot_core.storage import GCSStorage
 
 
@@ -37,7 +38,7 @@ def main() -> None:
     logging.info("Using device: %s", device)
 
     config = load_rag_config()
-    settings = AppSettings()
+    settings = get_settings()
 
     # docs_path is set in conf/base/rag_config.yml under embeddings.docs_path
     docs_dir = Path(config.docs_path)

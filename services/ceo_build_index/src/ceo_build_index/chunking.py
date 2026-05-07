@@ -4,7 +4,7 @@ from langchain_core.documents import Document as LangchainDocument
 from langchain_text_splitters import TextSplitter, RecursiveCharacterTextSplitter
 from transformers import AutoTokenizer
 
-from ceo_chatbot.config import load_rag_config
+from ceo_build_index.config import load_rag_config
 
 
 def _get_tokenizer(config_path: str | Path = "conf/base/rag_config.yml") -> AutoTokenizer:
