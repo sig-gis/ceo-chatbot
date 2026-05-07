@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 
 from ceo_rag_chatbot.dependencies import get_rag
 from ceo_rag_chatbot.schemas import ChatRequest, ChatResponse
-from ceo_chatbot.rag.pipeline import RagService
+from ceo_rag_chatbot.rag.pipeline import RagService
 
 router = APIRouter()
 

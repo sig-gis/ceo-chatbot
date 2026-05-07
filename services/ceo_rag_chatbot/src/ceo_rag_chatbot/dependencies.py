@@ -2,7 +2,7 @@
 """
 from fastapi import HTTPException, Request
 
-from ceo_chatbot.rag.pipeline import RagService
+from ceo_rag_chatbot.rag.pipeline import RagService
 
 
 def get_rag(request: Request) -> RagService:

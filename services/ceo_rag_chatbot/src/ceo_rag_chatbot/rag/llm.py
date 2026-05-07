@@ -22,7 +22,7 @@ from transformers import (
 )
 import google.genai as genai
 
-from ceo_chatbot.config import GeminiInferenceSettings, RAGConfig
+from ceo_rag_chatbot.config import GeminiInferenceSettings, RAGConfig
 
 
 

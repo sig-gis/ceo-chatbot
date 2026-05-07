@@ -4,9 +4,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from ceo_chatbot.config import load_rag_config
-from ceo_chatbot.rag.pipeline import RagService
-from ceo_chatbot.rag.retriever import get_retriever, load_faiss_index
+from ceo_rag_chatbot.config import load_rag_config
+from ceo_rag_chatbot.rag.pipeline import RagService
+from ceo_rag_chatbot.rag.retriever import get_retriever, load_faiss_index
 from ceo_chatbot_core.storage import GCSStorage
 from ceo_rag_chatbot.settings import get_settings
 
