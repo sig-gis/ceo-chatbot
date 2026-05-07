@@ -8,7 +8,7 @@ from ceo_chatbot.config import load_rag_config
 from ceo_chatbot.rag.pipeline import RagService
 from ceo_chatbot.rag.retriever import get_retriever, load_faiss_index
 from ceo_chatbot_core.storage import GCSStorage
-from app.settings import get_settings
+from ceo_rag_chatbot.settings import get_settings
 
 
 @asynccontextmanager

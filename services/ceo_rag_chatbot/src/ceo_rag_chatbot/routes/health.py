@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from app.schemas import HealthResponse
+from ceo_rag_chatbot.schemas import HealthResponse
 
 router = APIRouter()
 
