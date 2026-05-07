@@ -7,13 +7,34 @@ authors = [
     { name = "Arif Syraj", email = "126988341+arif-syr@users.noreply.github.com" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "pydantic", 
+    "pydantic-settings",
+    "pyyaml",
+    "faiss-cpu",
+    "langchain-core",
+    "langchain-community",
+    "langchain-huggingface",
+    "langchain-text-splitters",
+    "transformers",
+    "sentence-transformers",
+    "torch",
+    "faiss-cpu",
+    "unstructured[rst]",                                                                                
+    "ceo-chatbot-core"
+]
 
 [tool.uv.sources]
 ceo_chatbot_core = {workspace = true}
+torch = {index = "pytorch-cpu"}
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [project.scripts]
-ingest-docs = "ceo_ingest_docs.main:main"
+build-index = "ceo_build_index.main:main"
 
 [build-system]
 requires = ["uv_build>=0.11.6,<0.12.0"]
