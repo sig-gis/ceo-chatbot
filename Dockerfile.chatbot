@@ -15,7 +15,7 @@
 #                         (e.g. google/embeddinggemma-300m). Read automatically
 #                         by huggingface_hub; declared here for validation.
 # Optional:
-#   INDEX_LOCAL_DIR              Where to download the index (default /tmp/ceo-chatbot-index)
+#   vectorstore_path              Where to download the index (default /tmp/ceo-chatbot-index)
 #   LOG_LEVEL                    Python log level (default INFO)
 #   GOOGLE_APPLICATION_CREDENTIALS  Path to ADC key file (bind-mount it in)
 
