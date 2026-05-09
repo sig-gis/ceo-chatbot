@@ -1,9 +1,7 @@
 """FastAPI dependency functions.
 """
 from fastapi import HTTPException, Request
-
 from ceo_rag_chatbot.rag.pipeline import RagService
-
 
 def get_rag(request: Request) -> RagService:
     """Return the loaded RagService. Raises 503 if lifespan hasn't finished yet."""

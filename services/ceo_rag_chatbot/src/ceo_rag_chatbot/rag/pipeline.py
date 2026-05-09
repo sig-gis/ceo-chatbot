@@ -15,7 +15,7 @@ from pathlib import Path
 import logging
 from langchain_core.documents import Document as LangchainDocument
 from transformers import PreTrainedTokenizerBase
-from ceo_rag_chatbot.config import load_rag_config, load_prompt_template
+from ceo_rag_chatbot.config import load_chatbot_config, load_prompt_template
 from ceo_rag_chatbot.rag.llm import get_reader_llm, LLMProvider
 from ceo_rag_chatbot.rag.retriever import load_faiss_index, get_retriever
 from ceo_rag_chatbot.rag.interpreter import QuestionInterpreter, Interpretation
@@ -51,7 +51,7 @@ class RagService:
         """
         
         # Load config
-        self.config = load_rag_config(config_path)
+        self.config = load_chatbot_config(config_path)
 
         # Load or inject retriever
         if retriever is not None:

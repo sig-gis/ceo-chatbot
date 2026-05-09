@@ -4,11 +4,10 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from ceo_rag_chatbot.config import load_rag_config
+from ceo_rag_chatbot.config import get_settings, load_chatbot_config
 from ceo_rag_chatbot.rag.pipeline import RagService
 from ceo_rag_chatbot.rag.retriever import get_retriever, load_faiss_index
 from ceo_chatbot_core.storage import GCSStorage
-from ceo_rag_chatbot.settings import get_settings
 
 
 @asynccontextmanager
@@ -16,6 +15,7 @@ async def lifespan(app: FastAPI):
     """Download the FAISS index from GCS and initialise RagService on startup."""
     t0 = time.monotonic()
     settings = get_settings()
+    config = load_chatbot_config()
 
     logging.basicConfig(level=settings.log_level)
     logger = logging.getLogger(__name__)
@@ -24,24 +24,23 @@ async def lifespan(app: FastAPI):
     # Cloud Run containers start fresh, so the files are never present on startup.
     # TODO: add smart-load (skip download if local copy is newer than GCS blob)
     #       using GCSStorage.blob_updated() once we want to support local dev speed.
-    settings.index_local_dir.mkdir(parents=True, exist_ok=True)
-    config = load_rag_config()
+    config.vectorstore_path.mkdir(parents=True, exist_ok=True)
     
     # Prefix comes from rag_config.yml (vectorstore_gcs) — same value the pipeline
     # used when uploading, so the download path always matches the upload path.
     index_prefix = str(config.vectorstore_gcs)
-    gcs = GCSStorage(settings.gcs_bucket_index, project=settings.google_cloud_project)
+    gcs = GCSStorage(settings.db_bucket_name, project=settings.google_cloud_project)
     for fname in ("index.faiss", "index.pkl"):
         gcs.download(
             f"{index_prefix}/{fname}",
-            settings.index_local_dir / fname,
+            settings.vectorstore_path / fname,
         )
-    logger.info("index downloaded to %s", settings.index_local_dir)
+    logger.info("index downloaded to %s", settings.vectorstore_path)
 
     # Build the retriever from the downloaded index. We inject it into RagService
-    # so RagService loads from settings.index_local_dir rather than the
+    # so RagService loads from settings.vectorstore_path rather than the
     # vectorstore_path in rag_config.yml — without needing to change pipeline.py.
-    faiss_index = load_faiss_index(settings.index_local_dir, config.embedding_model_name)
+    faiss_index = load_faiss_index(config.vectorstore_path, config.embedding_model_name)
     retriever = get_retriever(faiss_index)
 
     # RagService reads LLM settings from rag_config.yml and picks up GEMINI_API_KEY

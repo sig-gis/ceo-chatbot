@@ -22,7 +22,7 @@ from transformers import (
 )
 import google.genai as genai
 
-from ceo_rag_chatbot.config import GeminiInferenceSettings, RAGConfig
+from ceo_rag_chatbot.config import get_settings, ChatbotConfig
 
 
 
@@ -121,7 +121,7 @@ class GeminiProvider(LLMProvider):
     """Provider for Google Gemini API using the new google-genai SDK."""
     def __init__(self, model_choices:List[str]=None, max_output_tokens: int = 8192):
         # Instantiate genai client with API key
-        settings = GeminiInferenceSettings()
+        settings = get_settings()
         api_key = settings.gemini_api_key
         
         if not api_key:
@@ -230,7 +230,7 @@ class GeminiProvider(LLMProvider):
 
 
 def get_reader_llm(
-    config: RAGConfig
+    config: ChatbotConfig
 ) -> Tuple[LLMProvider, Optional[PreTrainedTokenizerBase]]:
     """
     Factory function to get the appropriate LLM provider.
