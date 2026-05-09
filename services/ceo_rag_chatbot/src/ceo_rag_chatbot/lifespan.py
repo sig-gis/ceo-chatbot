@@ -33,12 +33,12 @@ async def lifespan(app: FastAPI):
     for fname in ("index.faiss", "index.pkl"):
         gcs.download(
             f"{index_prefix}/{fname}",
-            settings.vectorstore_path / fname,
+            config.vectorstore_path / fname,
         )
-    logger.info("index downloaded to %s", settings.vectorstore_path)
+    logger.info("index downloaded to %s", config.vectorstore_path)
 
     # Build the retriever from the downloaded index. We inject it into RagService
-    # so RagService loads from settings.vectorstore_path rather than the
+    # so RagService loads from config.vectorstore_path rather than the
     # vectorstore_path in rag_config.yml — without needing to change pipeline.py.
     faiss_index = load_faiss_index(config.vectorstore_path, config.embedding_model_name)
     retriever = get_retriever(faiss_index)
