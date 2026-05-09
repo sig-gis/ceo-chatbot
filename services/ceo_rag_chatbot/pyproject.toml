@@ -8,13 +8,29 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "pydantic",
+    "pydantic-settings",
+    "pyyaml",
     "uvicorn",
-    "fastapi",
-    "ceo_chatbot_core"
+    "torch",
+    "sentence-transformers>=5.1.2",
+    "faiss-cpu",
+    "transformers",
+    "fastapi[standard]",
+    "google-genai",
+    "ceo_chatbot_core",
+    "langchain-community",
+    "langchain-core",
+    "langchain-huggingface"
 ]
 
 [tool.uv.sources]
 ceo_chatbot_core = {workspace = true}
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [project.scripts]
 chatbot = "ceo_rag_chatbot.main:run"
