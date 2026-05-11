@@ -54,7 +54,7 @@ class ChatbotSettings(BaseSettings):
     gemini_api_key: str = Field(..., alias='GEMINI_API_KEY')
     # GCP project ID. storage.Client() requires this; it cannot be inferred
     # from user ADC credentials (only service-account keys embed a project).
-    google_cloud_project: str = Field(..., alias="GCP_PROJECT_ID")
+    google_cloud_project: str = Field(..., alias="GOOGLE_CLOUD_PROJECT")
 
     #  GCS bucket that holds the FAISS index uploaded by the pipeline job
     db_bucket_name: str = Field(..., alias="DB_BUCKET")

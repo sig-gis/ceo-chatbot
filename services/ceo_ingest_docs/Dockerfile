@@ -6,7 +6,7 @@
 #   docker build -f services/ceo_ingest_docs/Dockerfile -t ceo-ingest-docs:latest .
 #
 # Required env at runtime:
-#   GCP_PROJECT_ID, DOCS_BUCKET, PREFIX
+#   GOOGLE_CLOUD_PROJECT, DOCS_BUCKET, PREFIX
 # Plus Google Cloud credentials:
 #   - local: bind-mount your ADC file and set GOOGLE_APPLICATION_CREDENTIALS
 #   - Cloud Run Job: credentials come from the attached service account

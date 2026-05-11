@@ -12,7 +12,7 @@ class RAGSettings(BaseSettings):
 
     docs_bucket_name: str = Field(...,alias='DOCS_BUCKET')
     folder_prefix: str = Field(...,alias='PREFIX')
-    google_cloud_project: str = Field(..., alias="GCP_PROJECT_ID")
+    google_cloud_project: str = Field(..., alias="GOOGLE_CLOUD_PROJECT")
     db_bucket_name: str = Field(...,alias='DB_BUCKET')
 
     # This tells BaseSettings where to find the above fields.
