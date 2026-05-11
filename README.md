@@ -470,6 +470,95 @@ The container clones the upstream docs repo into a temp directory and uploads an
 > the job configuration, and the attached service account supplies
 > credentials automatically (no ADC bind-mount needed).
 
+### Build the pipeline image
+
+The pipeline service (`ceo-build-index`) reads the source docs from GCS (or a local copy if one exists), splits them into chunks, embeds each chunk with a HuggingFace model, builds a FAISS index, and uploads the index back to GCS. The chatbot service reads from that same path on startup. From the project root:
+
+```bash
+docker build -f services/ceo_build_index/Dockerfile -t ceo-build-index:latest .
+```
+
+The first build takes several minutes - this image carries the heavyweight machine-learning stack: PyTorch (CPU-only, ~200 MB), sentence-transformers, transformers, faiss-cpu, langchain-*, and `unstructured` (for RST parsing). The pyproject pins torch to the CPU wheel index, so this image never pulls CUDA wheels and stays under the 4 GB target. Subsequent builds reuse cached layers - only the changed layers rebuild.
+
+When it finishes you should see something like:
+
+```
+=> exporting to image
+=> => writing image sha256:...
+=> => naming to docker.io/library/ceo-build-index:latest
+```
+
+Check the final image size:
+
+```bash
+docker image ls ceo-build-index:latest
+```
+
+### Run the pipeline container
+
+The container needs the same `.env` you use for local development - specifically `GOOGLE_CLOUD_PROJECT`, `DOCS_BUCKET`, `DB_BUCKET`, `PREFIX`, and `HF_TOKEN` (the default embedding model is gated; see step 5 of first-time setup if you haven't generated a token yet). It also needs your Google Cloud credentials so it can read from `DOCS_BUCKET` and write to `DB_BUCKET`.
+
+The easiest way to supply credentials locally is the same pattern used for the extract image above: bind-mount your ADC file (created by `gcloud auth application-default login`) and point the container at it with `GOOGLE_APPLICATION_CREDENTIALS`. If you have already downloaded the document store locally,
+
+**Linux / macOS:**
+
+```bash
+docker run --rm \
+  --env-file .env \
+  -v "$HOME/.config/gcloud/application_default_credentials.json:/gcp/adc.json:ro" \
+  -e GOOGLE_APPLICATION_CREDENTIALS=/gcp/adc.json \
+  ceo-build-index:latest
+```
+
+**Windows (PowerShell):**
+
+```powershell
+docker run --rm `
+  --env-file .env `
+  -v "$env:APPDATA\gcloud\application_default_credentials.json:/gcp/adc.json:ro" `
+  -e GOOGLE_APPLICATION_CREDENTIALS=/gcp/adc.json `
+  ceo-build-index:latest
+```
+
+The default entry point is `build-index` with `--device auto`, which falls through to CPU inside this image because the container has no GPU runtime. On CPU the embed step takes about 5-30 minutes for the ~300 RST files in the upstream CEO docs.
+
+You will see log lines like:
+
+```
+2026-04-30 12:00:01 - INFO - Using device: cpu
+2026-04-30 12:00:01 - INFO - Local docs found at data/ceo-docs, ...
+2026-04-30 12:04:30 - INFO - Index saved to data/vectorstores/ceo_docs_faiss
+2026-04-30 12:04:31 - INFO - Index uploaded to gs://my-db-bucket/ceo-docs-faiss/
+gs://my-db-bucket/ceo-docs-faiss/
+```
+
+The last line printed is the GCS path of the uploaded index - this is exactly what `uv run build-index` prints, and the chatbot service reads from this same path on startup.
+
+By default the container is stateless: it has no source docs baked in (the repo's `data/` directory is excluded from the build context via `.dockerignore`), so every run downloads the docs from `DOCS_BUCKET` before chunking. If you are iterating locally and want repeated runs to reuse the same working copy, bind-mount your host `data/` onto `/app/data/`. The pipeline checks `data/ceo-docs/` first and only falls back to GCS when it finds no RST files there:
+
+```bash
+docker run --rm \
+  --env-file .env \
+  -v "$HOME/.config/gcloud/application_default_credentials.json:/gcp/adc.json:ro" \
+  -e GOOGLE_APPLICATION_CREDENTIALS=/gcp/adc.json \
+  -v "$PWD/data:/app/data" \
+  ceo-build-index:latest
+```
+
+> **Note on Cloud Run Jobs:** as with the extract image, environment variables are set on the job configuration and the attached service account supplies credentials automatically. `HF_TOKEN` should live in Secret Manager and be referenced from there rather than passed as a plain env var.
+
+If you have downloaded the model locally already, you can bind-mount it to the docker container as well:
+
+```bash
+docker run --rm \
+  --env-file .env \
+  -v "$HOME/.config/gcloud/application_default_credentials.json:/gcp/adc.json:ro" \
+  -e GOOGLE_APPLICATION_CREDENTIALS=/gcp/adc.json \
+  -v "$PWD/data:/app/data" \
+  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
+  ceo-build-index:latest
+```
+
 ### Build the chatbot image
 
 From the project root:
