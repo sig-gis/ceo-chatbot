@@ -4,7 +4,7 @@ import tempfile
 from pathlib import Path
 
 from ceo_ingest_docs.config import load_ingestion_config
-from ceo_ingest_docs.settings import IngestionSettings
+from ceo_ingest_docs.settings import get_ingestion_settings
 from ceo_ingest_docs.github_loader import GitHubLoader
 from ceo_chatbot_core.storage import GCSStorage
 
@@ -21,13 +21,13 @@ def main():
         config = load_ingestion_config("conf/base/rag_config.yml")
         logging.info(f"Loaded configuration for GitHub repo: {config.repo_url}")
 
-        settings = IngestionSettings()
+        settings = get_ingestion_settings()
         bucket_name = settings.docs_bucket_name
         prefix = settings.folder_prefix
 
         # Initialize components
         loader = GitHubLoader(config)
-        gcs = GCSStorage(bucket_name)
+        gcs = GCSStorage(bucket_name=bucket_name, project=settings.google_cloud_project)
 
         # Perform the extraction and upload
         with tempfile.TemporaryDirectory() as temp_dir:

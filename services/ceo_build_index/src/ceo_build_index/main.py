@@ -5,7 +5,7 @@ from pathlib import Path
 import torch
 
 from ceo_build_index.config import load_rag_config
-from ceo_build_index.settings import get_settings
+from ceo_build_index.settings import get_index_settings
 from ceo_build_index.chunking import semantic_recursive_chunks
 from ceo_build_index.index_builder import build_faiss_index
 from ceo_build_index.loaders import load_rst_docs
@@ -38,7 +38,7 @@ def main() -> None:
     logging.info("Using device: %s", device)
 
     config = load_rag_config()
-    settings = get_settings()
+    settings = get_index_settings()
 
     # docs_path is set in conf/base/rag_config.yml under embeddings.docs_path
     docs_dir = Path(config.docs_path)
@@ -49,7 +49,7 @@ def main() -> None:
     else:
         logging.info("No local docs at %s, downloading from GCS...", docs_dir)
         docs_dir.mkdir(parents=True, exist_ok=True)
-        gcs_docs = GCSStorage(settings.docs_bucket_name)
+        gcs_docs = GCSStorage(bucket_name=settings.docs_bucket_name, project=settings.google_cloud_project)
         n = gcs_docs.download_prefix(settings.folder_prefix, docs_dir)
         logging.info("Downloaded %d files from gs://%s/%s", n, settings.docs_bucket_name, settings.folder_prefix)
 
@@ -65,7 +65,7 @@ def main() -> None:
     logging.info("Index saved to %s", index_dir)
 
     # Upload index.faiss and index.pkl to GCS
-    gcs_db = GCSStorage(settings.db_bucket_name)
+    gcs_db = GCSStorage(settings.db_bucket_name, project=settings.google_cloud_project)
     prefix = str(config.vectorstore_gcs)
     for fname in ("index.faiss", "index.pkl"):
         gcs_db.upload(index_dir / fname, f"{prefix}/{fname}")

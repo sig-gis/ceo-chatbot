@@ -12,6 +12,7 @@ class RAGSettings(BaseSettings):
 
     docs_bucket_name: str = Field(...,alias='DOCS_BUCKET')
     folder_prefix: str = Field(...,alias='PREFIX')
+    google_cloud_project: str = Field(..., alias="GCP_PROJECT_ID")
     db_bucket_name: str = Field(...,alias='DB_BUCKET')
 
     # This tells BaseSettings where to find the above fields.
@@ -22,6 +23,6 @@ class RAGSettings(BaseSettings):
     )
 
 @lru_cache
-def get_settings() -> RAGSettings:
+def get_index_settings() -> RAGSettings:
     """Return a cached IngestionSettings instance so env / .env is read once."""
     return RAGSettings()

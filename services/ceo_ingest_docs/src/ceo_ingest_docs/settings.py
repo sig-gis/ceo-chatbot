@@ -11,6 +11,7 @@ class IngestionSettings(BaseSettings):
     """
 
     docs_bucket_name: str = Field(alias="DOCS_BUCKET")
+    google_cloud_project: str = Field(..., alias="GCP_PROJECT_ID")
     folder_prefix: str = Field(alias="PREFIX")
 
     model_config = SettingsConfigDict(
@@ -21,6 +22,6 @@ class IngestionSettings(BaseSettings):
 
 
 @lru_cache
-def get_settings() -> IngestionSettings:
+def get_ingestion_settings() -> IngestionSettings:
     """Return a cached IngestionSettings instance so env / .env is read once."""
     return IngestionSettings()
