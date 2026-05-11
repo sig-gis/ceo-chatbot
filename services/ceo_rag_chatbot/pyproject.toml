@@ -26,6 +26,7 @@ dependencies = [
 
 [tool.uv.sources]
 ceo_chatbot_core = {workspace = true}
+torch = {index = "pytorch-cpu"}
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
