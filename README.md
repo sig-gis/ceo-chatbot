@@ -25,16 +25,16 @@ one git repo holding multiple Python projects that share a single lockfile but
 each have their own `pyproject.toml` and dependency list. The three jobs above
 map to three workspace members, plus a small shared library:
 
-- `packages/ceo_chatbot_core/` — shared library. Holds `GCSStorage` (the
+- `packages/ceo_chatbot_core/` - shared library. Holds `GCSStorage` (the
   Google Cloud Storage sync helper used by every service) and a small YAML
   loader. Anything used by more than one service lives here.
-- `services/ceo_ingest_docs/` — the **extract** service. Clones the CEO docs
+- `services/ceo_ingest_docs/` - the **extract** service. Clones the CEO docs
   repo from GitHub and uploads it to GCS. Installs an `ingest-docs` command.
-- `services/ceo_build_index/` — the **pipeline** service. Reads docs from GCS
+- `services/ceo_build_index/` - the **pipeline** service. Reads docs from GCS
   (or from a local copy), builds a FAISS index, saves it locally, and uploads
   the index files to GCS. Installs a `build-index` command. Pinned to CPU
   PyTorch so the install stays small.
-- The root project (`pyproject.toml`, `app/`, `src/ceo_chatbot/`) — currently
+- The root project (`pyproject.toml`, `app/`, `src/ceo_chatbot/`) - currently
   holds the FastAPI **chatbot** service and the RAG glue code. A future
   refactor will move it into its own workspace member too.
 
@@ -97,7 +97,7 @@ ceo-chatbot/
 - A computer with Python 3.12 or newer
 - A Google Cloud account with access to the project (ask your team lead)
 - A Gemini API key (free at https://aistudio.google.com/apikey)
-- A HuggingFace access token (the embedding model is gated — see step 5)
+- A HuggingFace access token (the embedding model is gated - see step 5)
 - About 15 minutes for first-time setup
 
 Docker is optional - only needed if you want to test the deployed-image
@@ -149,7 +149,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 See the [uv installation docs for Windows installation instructions](https://docs.astral.sh/uv/getting-started/installation/#__tabbed_1_2).
 
-This project uses uv for dependency management. uv is workspace-aware — you
+This project uses uv for dependency management. uv is workspace-aware - you
 run a single `uv sync` and it installs every workspace member's dependencies
 into one shared `.venv/`. [Read more about uv in the docs.](https://docs.astral.sh/uv/getting-started/)
 
@@ -157,7 +157,7 @@ Also see [CONTRIBUTING.md](CONTRIBUTING.md) for more detail on developing with `
 
 ### 5. Get a HuggingFace token (for the embedding model) and authenticate with HuggingFace
 
-The default embedding model — [`google/embeddinggemma-300m`](https://huggingface.co/google/embeddinggemma-300m) — is gated, meaning you have to accept its license before you can download it.
+The default embedding model - [`google/embeddinggemma-300m`](https://huggingface.co/google/embeddinggemma-300m) - is gated, meaning you have to accept its license before you can download it.
 
 1. Visit the model page above and click **Acknowledge license**. Access is granted instantly.
 2. Generate an access token: Profile → Settings → Access Tokens → **+ Create new token** → Token type **Read** → **Create token**. Copy the value.
@@ -228,13 +228,13 @@ cp .env.example .env
 Open `.env` in any text editor and set each variable. Each line has a comment
 explaining what it's for. The values you'll need:
 
-- `GOOGLE_APPLICATION_CREDENTIALS` — path to your ADC file (Linux:
+- `GOOGLE_APPLICATION_CREDENTIALS` - path to your ADC file (Linux:
   `~/.config/gcloud/application_default_credentials.json`). Step 2 created it.
-- `GCP_PROJECT_ID` — the project you set in step 2.
-- `DOCS_BUCKET` and `PREFIX` — where the source docs live in GCS.
-- `DB_BUCKET` — where the FAISS index gets uploaded.
-- `GEMINI_API_KEY` — from step 3.
-- `HF_TOKEN` — from step 5.
+- `GOOGLE_CLOUD_PROJECT` - the project you set in step 2.
+- `DOCS_BUCKET` and `PREFIX` - where the source docs live in GCS.
+- `DB_BUCKET` - where the FAISS index gets uploaded.
+- `GEMINI_API_KEY` - from step 3.
+- `HF_TOKEN` - from step 5.
 
 > **Never commit `.env`** and never copy it into Docker images.
 
@@ -247,7 +247,7 @@ The two pipeline jobs are exposed as commands by the workspace:
 | `uv run ingest-docs` | Clones the CEO docs repo and syncs it to GCS | `services/ceo_ingest_docs` |
 | `uv run build-index` | Builds the FAISS index from docs in GCS | `services/ceo_build_index` |
 
-Run them in order — extract first, build-index second.
+Run them in order - extract first, build-index second.
 
 ### 1. Sync the source docs with GCS
 
@@ -286,7 +286,7 @@ searches at query time. It works as follows:
    `data/vectorstores/ceo_docs_faiss/` (configurable via `vectorstore_path`)
    and uploads it to GCS.
 
-Run this any time you want to rebuild the index — for example, after step 1
+Run this any time you want to rebuild the index - for example, after step 1
 has synced new docs.
 
 If the source docs have changed in GCS and you want to pull the new copy,
@@ -348,7 +348,7 @@ runs the embedding model (the slow part):
 |------|-------------|
 | `--device auto` | Default. Picks `cuda` if available, then `mps`, then `cpu`. |
 | `--device cpu` | Force CPU. Safe on any machine. Slowest. |
-| `--device cuda` | Force NVIDIA GPU. Requires CUDA-enabled torch — see the note below. |
+| `--device cuda` | Force NVIDIA GPU. Requires CUDA-enabled torch - see the note below. |
 | `--device mps` | Force Apple Silicon GPU (M1/M2/M3 Mac). Requires macOS 12.3+. |
 
 Example forcing CPU even on a GPU machine:
@@ -364,7 +364,7 @@ uv run build-index --device cpu
 > ```bash
 > uv pip install torch --index-url https://download.pytorch.org/whl/cu128
 > ```
-> (Replace `cu128` with the CUDA version reported by `nvidia-smi` — see
+> (Replace `cu128` with the CUDA version reported by `nvidia-smi` - see
 > [pytorch.org/get-started/locally](https://pytorch.org/get-started/locally/).)
 >
 > For the chatbot service which only needs to run inference on the embedded
@@ -401,9 +401,74 @@ git).
 
 ## Running with Docker
 
-Only the chatbot service has a Dockerfile today (`Dockerfile.chatbot`). The
-extract and pipeline services are jobs that run on demand; their Dockerfiles
-will land alongside Cloud Run Job configs in a follow-up.
+Each service has/will have its own Dockerfile under `services/<name>/Dockerfile`.
+They are always built from the repo root so the workspace `uv.lock` is in the build context - every image installs only its own workspace member's dependency closure via `uv sync --package <name>`.
+
+The pipeline service's Dockerfile lands in a follow-up commit; the chatbot image is still served by the legacy `Dockerfile.chatbot` at the repo root for now.
+
+### Build the extract image
+
+The extract service (`ceo-ingest-docs`) clones the upstream CEO docs repository and syncs it to GCS. From the project root:
+
+```bash
+docker build -f services/ceo_ingest_docs/Dockerfile -t ceo-ingest-docs:latest .
+```
+
+The first build takes a minute or two while uv resolves the workspace and installs the few dependencies (`pydantic`, `google-cloud-storage`, `pyyaml`, the shared `ceo_chatbot_core`) along with `git` - needed at runtime because the loader shells out to `git clone`. Subsequent builds reuse cached layers.
+
+When it finishes you should see something like:
+
+```
+=> exporting to image
+=> => writing image sha256:...
+=> => naming to docker.io/library/ceo-ingest-docs:latest
+```
+
+Check the final image size:
+
+```bash
+docker image ls ceo-ingest-docs:latest
+```
+
+### Run the extract container
+
+The container needs the same `.env` you use for local development - specifically `GOOGLE_CLOUD_PROJECT`, `DOCS_BUCKET`, and `PREFIX` - plus access to your Google Cloud credentials so it can write to the bucket.
+
+The easiest way to supply credentials locally is the same pattern used for the chatbot below: bind-mount your ADC file (created by `gcloud auth application-default login`) and point the container at it with `GOOGLE_APPLICATION_CREDENTIALS`.
+
+**Linux / macOS:**
+
+```bash
+docker run --rm \
+  --env-file .env \
+  -v "$HOME/.config/gcloud/application_default_credentials.json:/gcp/adc.json:ro" \
+  -e GOOGLE_APPLICATION_CREDENTIALS=/gcp/adc.json \
+  ceo-ingest-docs:latest
+```
+
+**Windows (PowerShell):**
+
+```powershell
+docker run --rm `
+  --env-file .env `
+  -v "$env:APPDATA\gcloud\application_default_credentials.json:/gcp/adc.json:ro" `
+  -e GOOGLE_APPLICATION_CREDENTIALS=/gcp/adc.json `
+  ceo-ingest-docs:latest
+```
+
+The container clones the upstream docs repo into a temp directory and uploads any new or changed files to your `DOCS_BUCKET`. When it finishes you'll see the same summary line as `uv run ingest-docs`:
+
+```
+{'uploaded': 42, 'skipped': 0, 'total': 42}
+```
+
+`uploaded` is files sent to GCS, `skipped` is files already up to date,
+`total` is their sum.
+
+> **Note on Cloud Run Jobs:** when deploying this image to Cloud Run
+> Jobs, you do not use `docker run`. Environment variables are set in
+> the job configuration, and the attached service account supplies
+> credentials automatically (no ADC bind-mount needed).
 
 ### Build the chatbot image
 
@@ -415,23 +480,23 @@ docker build -f Dockerfile.chatbot -t ceo-chatbot:latest .
 
 The build takes a few minutes the first time while it downloads and installs
 PyTorch, sentence-transformers, and the other dependencies. Subsequent builds
-reuse cached layers — only the changed layers rebuild.
+reuse cached layers - only the changed layers rebuild.
 
 ### Run the chatbot container
 
-The container reads its configuration from your existing `.env` file — the
+The container reads its configuration from your existing `.env` file - the
 same one you use for local development. Make sure it contains these keys:
 
 ```
 GEMINI_API_KEY=...
 DB_BUCKET=...
-GCP_PROJECT_ID=...
+GOOGLE_CLOUD_PROJECT=...
 HF_TOKEN=...
 ```
 
 In addition, the container needs your Google Cloud credentials so it can
-download the FAISS index from GCS. An earlier step — `gcloud auth
-application-default login` — creates an ADC file at
+download the FAISS index from GCS. An earlier step - `gcloud auth
+application-default login` - creates an ADC file at
 `~/.config/gcloud/application_default_credentials.json`. The easiest way to
 supply your credentials is to bind-mount this file to `/gcp/adc.json`, then
 point the container at it with `GOOGLE_APPLICATION_CREDENTIALS`.
@@ -460,7 +525,7 @@ docker run --rm `
 
 `--env-file` injects every variable from `.env` without exposing secrets in
 your shell history or in `docker inspect` output. Note that `.env` itself is
-**not** copied into the image — it's read at runtime from your host.
+**not** copied into the image - it's read at runtime from your host.
 
 > **Note on Cloud Run:** when deploying to Cloud Run you do not use
 > `docker run`. Environment variables are set in the service configuration,
@@ -487,7 +552,7 @@ You should see:
 ```
 
 If you see `{"status": "loading"}` with HTTP 503, the index is still
-downloading — wait a moment and try again.
+downloading - wait a moment and try again.
 
 You can also visit http://localhost:8080/docs to see the current API and
 schemas.
@@ -561,8 +626,8 @@ uv run pytest tests/
 
 You should see all tests pass with no errors.
 
-The unit tests check that the sync logic — the rules that decide whether a
-file gets uploaded to Google Cloud Storage or skipped — behaves correctly for
+The unit tests check that the sync logic - the rules that decide whether a
+file gets uploaded to Google Cloud Storage or skipped - behaves correctly for
 every case: a file that doesn't exist yet in GCS, a file that was touched
 locally but didn't actually change, a file with real changes, and a file
 where the remote copy is newer. These tests run without any GCS credentials
