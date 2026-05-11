@@ -401,10 +401,8 @@ git).
 
 ## Running with Docker
 
-Each service has/will have its own Dockerfile under `services/<name>/Dockerfile`.
+Each service has its own Dockerfile under `services/<name>/Dockerfile`.
 They are always built from the repo root so the workspace `uv.lock` is in the build context - every image installs only its own workspace member's dependency closure via `uv sync --package <name>`.
-
-The pipeline service's Dockerfile lands in a follow-up commit; the chatbot image is still served by the legacy `Dockerfile.chatbot` at the repo root for now.
 
 ### Build the extract image
 
@@ -561,34 +559,41 @@ docker run --rm \
 
 ### Build the chatbot image
 
-From the project root:
+The chatbot service (`ceo-rag-chatbot`) downloads the FAISS index from GCS on startup, loads the embedding model from HuggingFace, and serves a FastAPI app at `/chat`. From the project root:
 
 ```bash
-docker build -f Dockerfile.chatbot -t ceo-chatbot:latest .
+docker build -f services/ceo_rag_chatbot/Dockerfile -t ceo-rag-chatbot:latest .
 ```
 
-The build takes a few minutes the first time while it downloads and installs
-PyTorch, sentence-transformers, and the other dependencies. Subsequent builds
-reuse cached layers - only the changed layers rebuild.
+The first build takes several minutes - it installs the same heavyweight machine-learning stack as the pipeline image (PyTorch CPU, sentence-transformers, transformers, faiss-cpu, langchain-*) plus FastAPI/uvicorn and google-genai. The pyproject pins torch to the CPU wheel index, so this image never pulls CUDA wheels. Subsequent builds reuse cached layers - only the changed layers rebuild.
+
+When it finishes you should see something like:
+
+```
+=> exporting to image
+=> => writing image sha256:...
+=> => naming to docker.io/library/ceo-rag-chatbot:latest
+```
+
+Check the final image size:
+
+```bash
+docker image ls ceo-rag-chatbot:latest
+```
+
 
 ### Run the chatbot container
 
-The container reads its configuration from your existing `.env` file - the
-same one you use for local development. Make sure it contains these keys:
+The container reads its configuration from your `.env` file - the same one you use for local development. Make sure it contains these keys:
 
 ```
 GEMINI_API_KEY=...
-DB_BUCKET=...
 GOOGLE_CLOUD_PROJECT=...
+DB_BUCKET=...
 HF_TOKEN=...
 ```
 
-In addition, the container needs your Google Cloud credentials so it can
-download the FAISS index from GCS. An earlier step - `gcloud auth
-application-default login` - creates an ADC file at
-`~/.config/gcloud/application_default_credentials.json`. The easiest way to
-supply your credentials is to bind-mount this file to `/gcp/adc.json`, then
-point the container at it with `GOOGLE_APPLICATION_CREDENTIALS`.
+It also needs your Google Cloud credentials so it can download the FAISS index from GCS. An earlier step - `gcloud auth application-default login` - creates an ADC file at `~/.config/gcloud/application_default_credentials.json`. Bind-mount this file to `/gcp/adc.json` and point the container at it with `GOOGLE_APPLICATION_CREDENTIALS`.
 
 **Linux / macOS:**
 
@@ -598,8 +603,9 @@ docker run --rm \
   --env-file .env \
   -v "$HOME/.config/gcloud/application_default_credentials.json:/gcp/adc.json:ro" \
   -e GOOGLE_APPLICATION_CREDENTIALS=/gcp/adc.json \
-  ceo-chatbot:latest
+  ceo-rag-chatbot:latest
 ```
+> **Note on run options**: If you ran the index building pipeline, the document store and embedding model will already exist locally. In that case, there are instructions below to use the existing versions instead of downloading the index and model once more.
 
 **Windows (PowerShell):**
 
@@ -609,24 +615,67 @@ docker run --rm `
   --env-file .env `
   -v "$env:APPDATA\gcloud\application_default_credentials.json:/gcp/adc.json:ro" `
   -e GOOGLE_APPLICATION_CREDENTIALS=/gcp/adc.json `
-  ceo-chatbot:latest
+  ceo-rag-chatbot:latest
 ```
 
-`--env-file` injects every variable from `.env` without exposing secrets in
-your shell history or in `docker inspect` output. Note that `.env` itself is
-**not** copied into the image - it's read at runtime from your host.
+`--env-file` injects every variable from `.env` without exposing secrets in your shell history or in `docker inspect` output. Note that `.env` itself is **not** copied into the image - it's read at runtime from your host.
 
-> **Note on Cloud Run:** when deploying to Cloud Run you do not use
-> `docker run`. Environment variables are set in the service configuration,
-> and secrets (`GEMINI_API_KEY`, `HF_TOKEN`) should be stored in GCP Secret
-> Manager and referenced from there rather than passed as plain env vars.
+`-p 8080:8080` publishes the container's port 8080 to your host. Without it, uvicorn listens inside the container but your browser cannot reach it.
 
-The container downloads the FAISS index from GCS on startup (a few seconds).
-Once it is ready, you will see a log line like:
+The container downloads the FAISS index from GCS (a few seconds) and the embedding model from HuggingFace (the first run fetches roughly 600 MB - 1.2 GB of weights for `google/embeddinggemma-300m`; tqdm progress is silent in `docker logs`). Once ready, you will see:
 
 ```
-INFO:app.lifespan:chatbot ready in 8.3s
+INFO:ceo_rag_chatbot.lifespan:chatbot ready in 6.1s
+INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
 ```
+
+> **Note on Cloud Deployment:** when deploying to the cloud you do not use `docker run`. Environment variables are set in the service configuration, and secrets (`GEMINI_API_KEY`, `HF_TOKEN`) should be stored in GCP Secret Manager/following your SOP and referenced from there rather than passed as plain env vars.
+
+#### Faster local iteration: bind-mounted caches
+
+By default each container is stateless - every run re-downloads the FAISS index from GCS and the embedding model from HuggingFace. For repeated local runs you can bind-mount the host paths the container would otherwise rebuild:
+
+- `$PWD/data:/app/data` - the chatbot writes the FAISS index to `data/vectorstores/ceo_docs_faiss/` inside the container. Reusing the host's `data/` skips the GCS download on subsequent starts.
+- `$HOME/.cache/huggingface:/root/.cache/huggingface` - the embedding model is cached here. Reusing the host's HuggingFace cache skips the ~600 MB - 1.2 GB model download. If you have already run `uv run build-index` on your host, the model is already there.
+
+**Reuse a local FAISS index only (skip the GCS index download):**
+
+```bash
+docker run --rm \
+  -p 8080:8080 \
+  --env-file .env \
+  -v "$HOME/.config/gcloud/application_default_credentials.json:/gcp/adc.json:ro" \
+  -e GOOGLE_APPLICATION_CREDENTIALS=/gcp/adc.json \
+  -v "$PWD/data:/app/data" \
+  ceo-rag-chatbot:latest
+```
+
+**Reuse the HuggingFace model cache only (skip the embedding-model download):**
+
+```bash
+docker run --rm \
+  -p 8080:8080 \
+  --env-file .env \
+  -v "$HOME/.config/gcloud/application_default_credentials.json:/gcp/adc.json:ro" \
+  -e GOOGLE_APPLICATION_CREDENTIALS=/gcp/adc.json \
+  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
+  ceo-rag-chatbot:latest
+```
+
+**Reuse both (fastest cold start):**
+
+```bash
+docker run --rm \
+  -p 8080:8080 \
+  --env-file .env \
+  -v "$HOME/.config/gcloud/application_default_credentials.json:/gcp/adc.json:ro" \
+  -e GOOGLE_APPLICATION_CREDENTIALS=/gcp/adc.json \
+  -v "$PWD/data:/app/data" \
+  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
+  ceo-rag-chatbot:latest
+```
+
+These are purely local-dev optimizations - Cloud Run runs fresh containers and always re-downloads from GCS and HuggingFace.
 
 ### Check it is running
 
