@@ -1,10 +1,6 @@
-"""Shared embedding model loader.
+"""Embedding model loader.
 
-Lives at the package root because it's used by both:
-  - ingest/index_builder.py (at index-build time)
-  - rag/retriever.py        (at query time)
-
-It must not live inside ingest/ or rag/, because doing so would force
+It must not live inside ceo_chatbot_core/, because doing so would force
 either service's Docker image to import the other service's package
 tree just to load the embedding model.
 """
