@@ -22,14 +22,11 @@ members = [
     "services/ceo_ingest_docs",
     "services/ceo_build_index",
     "services/ceo_rag_chatbot",
+    "demo/chainlit/chainlit-demo",
 ]
 
 [tool.uv.sources]
 ceo_chatbot_core = {workspace = true}
-
-[project.optional-dependencies]
-# Packages for document syncing with GCS
-extract = []
 
 [dependency-groups]
 dev = [

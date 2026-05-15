@@ -42,20 +42,6 @@ class AppSettings(BaseSettings):
         extra='ignore'
     )
 
-class GeminiInferenceSettings(BaseSettings):
-    """Env vars required for inference only (chatbot service).
-
-    Kept separate from AppSettings so the chatbot container does not need
-    pipeline-specific variables (DB_BUCKET, DOCS_BUCKET, PREFIX, HF_TOKEN).
-    """
-    gemini_api_key: str = Field(..., alias='GEMINI_API_KEY')
-
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
-
 def load_rag_config(
     config_path: str | Path = PROJECT_ROOT / "conf/base/rag_config.yml",
 ) -> RAGConfig:
@@ -86,37 +72,3 @@ def load_rag_config(
         github_ref=github["ref"],
         github_path=github["path"]
     )
-
-def load_prompt_template(
-    prompt_file: str | Path,
-    prompt_key: str = "default_prompt",
-) -> List[Dict[str, Any]]:
-    """
-    Load a chat template (list of {role, content} dicts) from a YAML file.
-
-    Example YAML structure:
-
-    default_prompt:
-      - role: system
-        content: "..."
-      - role: user
-        content: "..."
-    """
-    prompt_file = PROJECT_ROOT / prompt_file
-    path = Path(prompt_file)
-    data = load_yaml(path)
-
-    if prompt_key not in data:
-        available = ", ".join(sorted(data.keys()))
-        raise KeyError(
-            f"Prompt key '{prompt_key}' not found in {prompt_file}. "
-            f"Available keys: {available}"
-        )
-
-    template = data[prompt_key]
-    if not isinstance(template, list):
-        raise ValueError(
-            f"Prompt '{prompt_key}' in {prompt_file} is not a list of messages."
-        )
-
-    return template

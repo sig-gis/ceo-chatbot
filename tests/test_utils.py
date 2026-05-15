@@ -11,7 +11,7 @@
 
 from typing import List
 from langchain_core.documents import Document as LangchainDocument
-from ceo_chatbot.rag.pipeline import RagService
+from ceo_rag_chatbot.rag.pipeline import RagService
 
 
 class MockRetriever:

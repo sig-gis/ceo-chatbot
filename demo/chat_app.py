@@ -1,7 +1,7 @@
 import streamlit as st
 from pathlib import Path
 
-from ceo_chatbot.rag.pipeline import RagService
+from ceo_rag_chatbot.rag.pipeline import RagService
 from ceo_chatbot.config import load_rag_config
 from ceo_chatbot.ingest.gcs_uploader import GCSHandler
 

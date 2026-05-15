@@ -10,7 +10,7 @@
 """
 
 import logging
-from ceo_chatbot.rag.pipeline import RagService
+from ceo_rag_chatbot.rag.pipeline import RagService
 import re
 
 # Configure logging for debug output

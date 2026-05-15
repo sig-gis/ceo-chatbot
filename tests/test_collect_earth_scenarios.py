@@ -10,8 +10,8 @@
 """
 
 import logging
-from ceo_chatbot.rag.pipeline import RagService
-from ceo_chatbot.rag.interpreter import Interpretation
+from ceo_rag_chatbot.rag.pipeline import RagService
+from ceo_rag_chatbot.rag.interpreter import Interpretation
 
 # Configure logging for debug output
 logging.basicConfig(level=logging.INFO, format='%(message)s')
