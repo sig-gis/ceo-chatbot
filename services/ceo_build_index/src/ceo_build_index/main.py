@@ -65,7 +65,7 @@ def main() -> None:
     logging.info("Index saved to %s", index_dir)
 
     # Upload index.faiss and index.pkl to GCS
-    gcs_db = GCSStorage(settings.db_bucket_name, project=settings.google_cloud_project)
+    gcs_db = GCSStorage(bucket_name=settings.db_bucket_name, project=settings.google_cloud_project)
     prefix = str(config.vectorstore_gcs)
     for fname in ("index.faiss", "index.pkl"):
         gcs_db.upload(index_dir / fname, f"{prefix}/{fname}")

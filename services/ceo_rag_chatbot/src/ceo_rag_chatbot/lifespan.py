@@ -29,7 +29,7 @@ async def lifespan(app: FastAPI):
     # Prefix comes from rag_config.yml (vectorstore_gcs) — same value the pipeline
     # used when uploading, so the download path always matches the upload path.
     index_prefix = str(config.vectorstore_gcs)
-    gcs = GCSStorage(settings.db_bucket_name, project=settings.google_cloud_project)
+    gcs = GCSStorage(bucket_name=settings.db_bucket_name, project=settings.google_cloud_project)
     for fname in ("index.faiss", "index.pkl"):
         gcs.download(
             f"{index_prefix}/{fname}",
