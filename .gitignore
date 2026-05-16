@@ -217,3 +217,5 @@ conf/local/*
 # Cline
 .clinerules
 CLAUDE.md
+
+.chainlit

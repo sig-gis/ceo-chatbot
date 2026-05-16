@@ -1,0 +1,26 @@
+[project]
+name = "chainlit-demo"
+version = "0.1.0"
+description = "A chainlit app that interacts with the CEO Chatbot via the FastAPI server to run RAG over the CEO document store vector db."
+readme = "README.md"
+authors = [
+    { name = "Arif Syraj", email = "126988341+arif-syr@users.noreply.github.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "chainlit",
+    "ceo_chatbot_core",
+    "ceo_rag_chatbot",
+    "httpx"
+]
+
+[project.scripts]
+chainlit-demo = "chainlit_demo:main"
+
+[tool.uv.sources]
+ceo_chatbot_core = {workspace = true}
+ceo_rag_chatbot = {workspace = true}
+
+[build-system]
+requires = ["uv_build>=0.11.6,<0.12.0"]
+build-backend = "uv_build"
