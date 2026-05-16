@@ -1,5 +1,5 @@
 from ceo_rag_chatbot.rag.retriever import load_faiss_index, get_retriever
-from ceo_chatbot.config import load_rag_config
+from ceo_build_index.config import load_rag_config
 
 config = load_rag_config("conf/base/rag_config.yml")
 
