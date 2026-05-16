@@ -4,31 +4,15 @@ import httpx
 import json
 
 SERVER_URL = "http://localhost:8080"
+TIMEOUT = 15
 
 @cl.set_starters
 async def set_starters():
     return [
-        cl.Starter(
-            label="Test the waters",
-            message="What is CEO?",
-            # icon="/public/idea.svg",
-        ),
-
         # cl.Starter(
-        #     label="Explain superconductors",
-        #     message="Explain superconductors like I'm five years old.",
-        #     icon="/public/learn.svg",
-        # ),
-        # cl.Starter(
-        #     label="Python script for daily email reports",
-        #     message="Write a script to automate sending daily email reports in Python, and walk me through how I would set it up.",
-        #     icon="/public/terminal.svg",
-        #     command="code",
-        # ),
-        # cl.Starter(
-        #     label="Text inviting friend to wedding",
-        #     message="Write a text asking a friend to be my plus-one at a wedding next month. I want to keep it super short and casual, and offer an out.",
-        #     icon="/public/write.svg",
+        #     label="Test the waters",
+        #     message="What is CEO?",
+        #     # icon="/public/idea.svg",
         # )
     ]
 
@@ -103,7 +87,7 @@ async def send_message(msg: dict):
     }
     response = await client.post(f"{SERVER_URL}/chat", 
                                     json=llm_payload,
-                                    timeout=15)
+                                    timeout=TIMEOUT)
     return response
 
 @cl.on_chat_end

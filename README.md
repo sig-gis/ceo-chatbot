@@ -34,9 +34,14 @@ map to three workspace members, plus a small shared library:
   (or from a local copy), builds a FAISS index, saves it locally, and uploads
   the index files to GCS. Installs a `build-index` command. Pinned to CPU
   PyTorch so the install stays small.
+- `services/ceo_rag_chatbot/` - the **chatbot** service. Loads the RAG db, embeds queries, runs retrieval, and queries Gemini for inference. Installs a `chatbot` command. Pinned to CPU PyTorch so the install stays small.
 - The root project (`pyproject.toml`, `app/`, `src/ceo_chatbot/`) - currently
   holds the FastAPI **chatbot** service and the RAG glue code. A future
   refactor will move it into its own workspace member too.
+
+The `demo/chainlit/chainlit-demo/` directory is a small standalone Chainlit
+app that provides a browser chat UI. It is not a workspace member - instructions on running it are available below. It expects the FastAPI server to be running
+service to be running at `http://localhost:8080` and proxies questions to it.
 
 Why this shape: each service declares only the deps it actually needs, so a
 Docker image for one service does not pull in the other services' libraries
@@ -77,7 +82,9 @@ ceo-chatbot/
 ├── src/
 │   └── ceo_chatbot/             # chatbot RAG glue code (root project, for now)
 │
-├── demo/                        # streamlit demo app
+├── demo/
+│   └── chainlit/
+│       └── chainlit-demo/       # Chainlit browser UI (talks to the FastAPI chatbot)
 ├── notebooks/                   # development notebooks
 ├── scripts/
 │   └── test_rag.py              # local RAG smoke test
@@ -248,6 +255,10 @@ The two pipeline jobs are exposed as commands by the workspace:
 | `uv run build-index` | Builds the FAISS index from docs in GCS | `services/ceo_build_index` |
 
 Run them in order - extract first, build-index second.
+
+> **Chat UI:** once you have the chatbot FastAPI container running (see
+> [Run the chatbot container](#run-the-chatbot-container) below), you can
+> also launch the Chainlit UI to talk to it from a browser.
 
 ### 1. Sync the source docs with GCS
 
@@ -725,6 +736,33 @@ Sample response, which returns the answer as well as all cited sources:
   ]
 }
 ```
+
+### Running the Chainlit UI
+
+Once the chatbot container is up and responding at `http://localhost:8080`,
+you can launch a browser-based chat interface:
+
+```bash
+uv run chainlit run demo/chainlit/chainlit-demo/src/chainlit_demo/demo.py -w
+```
+
+The `-w` flag enables auto-reload so Chainlit restarts automatically if you
+edit the file.
+
+When Chainlit starts you should see:
+
+```
+Your app is available at http://localhost:8000
+```
+
+Open that URL in your browser. On first load the UI checks the chatbot's
+`/healthz` endpoint to confirm it is ready. If the chatbot is still starting
+up, the UI retries every 15 seconds for up to 3 minutes before giving up.
+
+> **Adjusting the timeout:** the per-request timeout (how long the UI waits
+> for each `/chat` response) is the `TIMEOUT` constant at the top of
+> `demo/chainlit/chainlit-demo/src/chainlit_demo/demo.py`. The default is
+> 15 seconds. Raise it if the chatbot is slow to respond on your machine.
 
 ### Common errors
 
