@@ -1,14 +1,19 @@
-# Welcome to Chainlit! 🚀🤖
+# CEO Documentation Assistant
 
-Hi there, Developer! 👋 We're excited to have you on board. Chainlit is a powerful tool designed to help you prototype, debug and share applications built on top of LLMs.
+Ask questions about [Collect Earth Online](https://collect-earth-online.org) and get answers drawn directly from the official documentation.
 
-## Useful Links 🔗
+## What you can ask
 
-- **Documentation:** Get started with our comprehensive [Chainlit Documentation](https://docs.chainlit.io) 📚
-- **Discord Community:** Join our friendly [Chainlit Discord](https://discord.gg/k73SQ3FyUh) to ask questions, share your projects, and connect with other developers! 💬
+- How do I create a project in CEO?
+- What imagery sources are available?
+- How do I set up an institution?
+- How does sample collection work?
 
-We can't wait to see what you create with Chainlit! Happy coding! 💻😊
+## How it works
 
-## Welcome screen
+Your question is matched against the CEO documentation using a semantic search index. The most relevant sections are retrieved and passed to Gemini, which writes a concise answer with links back to the source pages.
 
-To modify the welcome screen, edit the `chainlit.md` file at the root of your project. If you do not want a welcome screen, just leave this file empty.
+## Notes
+
+- Answers are only as current as the last time the index was built. If you notice outdated information, ask your team lead to re-run the pipeline.
+- The assistant does not have memory across sessions. Each new conversation starts fresh.

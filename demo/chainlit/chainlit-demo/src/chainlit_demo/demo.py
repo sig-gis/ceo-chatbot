@@ -9,11 +9,21 @@ TIMEOUT = 15
 @cl.set_starters
 async def set_starters():
     return [
-        # cl.Starter(
-        #     label="Test the waters",
-        #     message="What is CEO?",
-        #     # icon="/public/idea.svg",
-        # )
+        cl.Starter(
+            label="What is CEO?",
+            message="What is CEO?",
+            # icon="/public/idea.svg",
+        ),
+        cl.Starter(
+            label="Reviewing plots",
+            message="How can I review plots that have been already interpreted?",
+            # icon="/public/idea.svg",
+        ),
+        cl.Starter(
+            label="Quality Control feature",
+            message="Can you explain how to use the Quality Control feature under Plot Design?",
+            # icon="/public/idea.svg",
+        )
     ]
 
 @cl.on_chat_start
