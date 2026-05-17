@@ -369,7 +369,7 @@ requires-dist = [
 [[package]]
 name = "ceo-chatbot"
 version = "0.1.0"
-source = { editable = "." }
+source = { virtual = "." }
 dependencies = [
     { name = "ceo-chatbot-core" },
     { name = "google-cloud-storage" },
