@@ -27,6 +27,9 @@ package = false
 [tool.uv.sources]
 ceo_chatbot_core = {workspace = true}
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [dependency-groups]
 dev = [
     "ipykernel>=7.1.0",

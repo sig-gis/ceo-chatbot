@@ -4,8 +4,8 @@ from fastapi import HTTPException
 from starlette.datastructures import State
 from starlette.testclient import TestClient
 
-from app.main import app
-from app.dependencies import get_rag
+from ceo_rag_chatbot.main import app
+from ceo_rag_chatbot.dependencies import get_rag
 
 
 # ---------------------------------------------------------------------------

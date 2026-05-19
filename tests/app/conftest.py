@@ -17,8 +17,8 @@ from contextlib import asynccontextmanager
 from unittest.mock import MagicMock
 from starlette.testclient import TestClient
 
-from app.main import app
-from app.dependencies import get_rag
+from ceo_rag_chatbot.main import app
+from ceo_rag_chatbot.dependencies import get_rag
 
 
 # autouse=True means this fixture runs automatically for every single test,

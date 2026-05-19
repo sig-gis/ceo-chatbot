@@ -35,13 +35,7 @@ map to three workspace members, plus a small shared library:
   the index files to GCS. Installs a `build-index` command. Pinned to CPU
   PyTorch so the install stays small.
 - `services/ceo_rag_chatbot/` - the **chatbot** service. Loads the RAG db, embeds queries, runs retrieval, and queries Gemini for inference. Installs a `chatbot` command. Pinned to CPU PyTorch so the install stays small.
-- The root project (`pyproject.toml`, `app/`, `src/ceo_chatbot/`) - currently
-  holds the FastAPI **chatbot** service and the RAG glue code. A future
-  refactor will move it into its own workspace member too.
-
-The `demo/chainlit/chainlit-demo/` directory is a small standalone Chainlit
-app that provides a browser chat UI. It is not a workspace member - instructions on running it are available below. It expects the FastAPI server to be running
-service to be running at `http://localhost:8080` and proxies questions to it.
+- `demo/chainlit/chainlit-demo/` - a Chainlit browser UI that proxies questions to the chatbot's FastAPI server. Instructions for running it are below.
 
 Why this shape: each service declares only the deps it actually needs, so a
 Docker image for one service does not pull in the other services' libraries
@@ -69,18 +63,17 @@ ceo-chatbot/
 │
 ├── services/
 │   ├── ceo_ingest_docs/         # extract service: GitHub repo → GCS
+│   │   ├── Dockerfile
 │   │   ├── pyproject.toml
 │   │   └── src/ceo_ingest_docs/
 │   ├── ceo_build_index/         # pipeline service: docs → FAISS index → GCS
+│   │   ├── Dockerfile
 │   │   ├── pyproject.toml
 │   │   └── src/ceo_build_index/
-│   └── ceo_rag_chatbot/         # Chatbot and FastAPI service (TODO)
+│   └── ceo_rag_chatbot/         # chatbot: FastAPI server + RAG pipeline
+│       ├── Dockerfile
 │       ├── pyproject.toml
 │       └── src/ceo_rag_chatbot/
-|
-├── app/                         # chatbot FastAPI app (root project, for now)
-├── src/
-│   └── ceo_chatbot/             # chatbot RAG glue code (root project, for now)
 │
 ├── demo/
 │   └── chainlit/
@@ -90,9 +83,8 @@ ceo-chatbot/
 │   └── test_rag.py              # local RAG smoke test
 ├── tests/                       # unit/integration tests
 │
-├── pyproject.toml               # workspace root + chatbot project
+├── pyproject.toml               # workspace root (virtual — no installable package)
 ├── uv.lock                      # single lockfile for the whole workspace
-├── Dockerfile.chatbot           # currently the only Dockerfile
 └── README.md
 ```
 
@@ -219,9 +211,9 @@ installed in editable mode.
 Alternatively, you can only install dependencies for the specific service you want:
 
 ```{bash}
-uv sync --package ceo_ingest_docs # Installs deps for ingesting and uploading documents
-uv sync --package ceo_build_index # Similar for building the index
-<!-- uv sync --package ceo_rag_chatbot -->
+uv sync --package ceo_ingest_docs  # extract service
+uv sync --package ceo_build_index  # pipeline service
+uv sync --package ceo_rag_chatbot  # chatbot service
 ```
 
 ### 7. Configure your environment
@@ -794,18 +786,29 @@ or firewall.
 
 ## Tests
 
-Run the unit tests with:
+Run the full test suite with:
 
 ```bash
 uv run pytest tests/
 ```
 
-You should see all tests pass with no errors.
+You should see all tests pass with no errors. No GCS credentials, model
+downloads, or internet connection are required — all external services are
+replaced with fakes.
 
-The unit tests check that the sync logic - the rules that decide whether a
-file gets uploaded to Google Cloud Storage or skipped - behaves correctly for
-every case: a file that doesn't exist yet in GCS, a file that was touched
-locally but didn't actually change, a file with real changes, and a file
-where the remote copy is newer. These tests run without any GCS credentials
-or internet connection by substituting a fake GCS client, so they are safe to
-run anywhere and fast to run often.
+### What is covered
+
+| Area | What the tests check |
+|---|---|
+| **GCS sync logic** (`test_storage.py`) | The four upload/skip decisions in `sync_up`: blob missing, local newer with size change, local newer but same size (touched), remote newer. |
+| **GCS storage methods** (`core/`) | `upload`, `download`, `download_prefix`, `blob_updated`, `exists`, and `list` — including that `download` creates missing parent directories and that `download_prefix` strips the remote prefix from local paths. |
+| **YAML loader** (`core/`) | Valid files, empty files, missing files, and string vs Path arguments. |
+| **Ingestion config** (`ingest/`) | HTTPS URL validation (SSH-style URLs are rejected before any subprocess call), YAML field mapping, and default values for `ref` and `path`. |
+| **GitHub loader** (`ingest/`) | Git command construction, repo name parsing from URL, sub-path extraction, error handling for a failed `git clone`, and `FileNotFoundError` when the configured sub-path is missing. |
+| **Build index config** (`build_index/`) | `chunk_size` must be positive (a zero value would silently produce an empty index); YAML field mapping for the `embeddings:` section. |
+| **RST loader URLs** (`build_index/`) | The two URL-building branches: paths under a `source/` directory (segment stripped) vs. paths without one (relative path used); `.rst` → `.html` conversion; all elements from one file share the same URL. |
+| **Device resolution** (`build_index/`) | `--device auto` falls through `cuda → mps → cpu` in the correct priority order; explicit device values are returned unchanged. |
+| **API schemas** (`chatbot/`) | `ChatMessage` role allowlist, `ChatRequest` history default, `ChatResponse` fields, and `HealthResponse` status allowlist. |
+| **FAISS retriever** (`chatbot/`) | `get_retriever()` forwards `query` and `k` correctly to `similarity_search`, and defaults `k` to 5. |
+| **Interpretation model** (`chatbot/`) | Cross-field rules: `search_query` is required when `needs_retrieval=True` and must be `None` otherwise; `context_used` pattern; confidence score bounds. |
+| **FastAPI routes** (`app/`) | `/healthz` returns 200/503 based on startup state; `/chat` readiness gate, happy path, history forwarding, empty sources, missing URL fallback, and schema validation (422 responses). |
