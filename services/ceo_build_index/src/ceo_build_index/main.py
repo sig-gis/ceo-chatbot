@@ -23,6 +23,7 @@ def _resolve_device(device: str) -> str:
 
 
 def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s", force=True)
     parser = argparse.ArgumentParser(description="Build FAISS index from docs and upload result to GCS.")
     parser.add_argument(
         "--device",
@@ -31,8 +32,8 @@ def main() -> None:
         help="Device for the embedding model (default: auto-detect)",
     )
     args = parser.parse_args()
-
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+    use_local_store = args.local
+    logging.info("Using local doc store: %s", use_local_store)
 
     device = _resolve_device(args.device)
     logging.info("Using device: %s", device)
