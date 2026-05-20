@@ -27,12 +27,13 @@ class GCSStorage:
         """
         uploaded = skipped = 0
 
+        # For every file in local_dir - which is the tempdir where the docs were downloaded to 
         for local_path in (f for f in local_dir.rglob("*") if f.is_file()):
-            rel = local_path.relative_to(local_dir)
-            remote_path = f"{remote_prefix}/{rel}"
-            blob = self._bucket.blob(remote_path)
+            rel = local_path.relative_to(local_dir) # Get the filename relative to tmpdir path
+            remote_path = f"{remote_prefix}/{rel}" # Where the file will sit in GCS
+            blob = self._bucket.blob(remote_path) # Create a stub blob
 
-            if not blob.exists():
+            if not blob.exists(): # Upload unconditonally if blob does not exist
                 self.upload(local_path, remote_path)
                 logger.info("uploaded %s → %s", local_path, remote_path)
                 uploaded += 1
@@ -55,7 +56,8 @@ class GCSStorage:
                 logger.debug("skipped %s (same size, just touched)", local_path)
                 skipped += 1
                 continue
-
+            
+            # Upload document if remote blob is older than current version of it
             self.upload(local_path, remote_path)
             logger.info("uploaded %s → %s (size changed)", local_path, remote_path)
             uploaded += 1
@@ -70,6 +72,8 @@ class GCSStorage:
 
     def download_prefix(self, remote_prefix: str, local_dir: Path) -> int:
         """Download all blobs under remote_prefix into local_dir. Returns count."""
+        # remote_prefix is something like `collect-earth-online-doc/docs/source`, local_dir is `data/ceo-docs`
+        # The source files are located at DOCS_BUCKET/PREFIX
         blobs = list(self._client.list_blobs(self._bucket, prefix=remote_prefix))
         for blob in blobs:
             rel = blob.name[len(remote_prefix):].lstrip("/")
@@ -79,17 +83,6 @@ class GCSStorage:
     def upload(self, local: Path, remote: str) -> None:
         """Upload a single file unconditionally."""
         self._bucket.blob(remote).upload_from_filename(local)
-
-    def blob_updated(self, remote: str) -> datetime | None:
-        """Return the GCS last-modified timestamp for a blob, or None if it does not exist.
-
-        blob() returns a stub with no metadata; reload() fetches .updated from GCS.
-        """
-        blob = self._bucket.blob(remote)
-        if not blob.exists():
-            return None
-        blob.reload()
-        return blob.updated
 
     def exists(self, remote: str) -> bool:
         """Return True if the blob exists in the bucket."""

@@ -33,6 +33,7 @@ def main():
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             logging.info("Cloning repository...")
+            # Clones into tmp/repo_name/docs/source/
             cloned_path = loader.clone(temp_path)
             logging.info(f"Repository cloned to: {cloned_path}")
 

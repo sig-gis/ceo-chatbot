@@ -79,32 +79,6 @@ def test_download_prefix_strips_prefix_from_local_path(mock_client_cls, tmp_path
 
 
 @patch("ceo_chatbot_core.storage.storage.Client")
-def test_blob_updated_returns_none_when_missing(mock_client_cls):
-    """Returns None (not an exception) when the blob does not exist; reload() is not called."""
-    store, _, mock_bucket = _make_store(mock_client_cls)
-    mock_blob = MagicMock()
-    mock_blob.exists.return_value = False
-    mock_bucket.blob.return_value = mock_blob
-
-    assert store.blob_updated("some/file.txt") is None
-    mock_blob.reload.assert_not_called()
-
-
-@patch("ceo_chatbot_core.storage.storage.Client")
-def test_blob_updated_returns_timestamp_when_exists(mock_client_cls):
-    """Returns blob.updated after calling reload() to populate the metadata stub."""
-    store, _, mock_bucket = _make_store(mock_client_cls)
-    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
-    mock_blob = MagicMock()
-    mock_blob.exists.return_value = True
-    mock_blob.updated = ts
-    mock_bucket.blob.return_value = mock_blob
-
-    assert store.blob_updated("some/file.txt") == ts
-    mock_blob.reload.assert_called_once()
-
-
-@patch("ceo_chatbot_core.storage.storage.Client")
 def test_exists_delegates_to_blob(mock_client_cls):
     """exists() returns True/False directly from blob.exists() with no extra logic."""
     store, _, mock_bucket = _make_store(mock_client_cls)
