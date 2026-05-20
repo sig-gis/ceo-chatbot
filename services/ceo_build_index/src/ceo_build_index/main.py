@@ -31,6 +31,11 @@ def main() -> None:
         default="auto",
         help="Device for the embedding model (default: auto-detect)",
     )
+    parser.add_argument(
+        "--local", "-l",
+        action="store_true",
+        help="Use local doc store instead of downloading from GCS. Pass this flag to use local store."
+    )
     args = parser.parse_args()
     use_local_store = args.local
     logging.info("Using local doc store: %s", use_local_store)
@@ -43,12 +48,16 @@ def main() -> None:
 
     # docs_path is set in conf/base/rag_config.yml under embeddings.docs_path
     docs_dir = Path(config.docs_path)
+    local_docstore_exists = any(docs_dir.rglob("*.rst"))
 
     # Use local docs if they exist; otherwise download from GCS
-    if any(docs_dir.rglob("*.rst")):
+    if use_local_store and local_docstore_exists:
         logging.info("Local docs found at %s, skipping GCS download", docs_dir)
     else:
-        logging.info("No local docs at %s, downloading from GCS...", docs_dir)
+        if use_local_store and not local_docstore_exists:
+            logging.warning(f"--local flag supplied but no local doc store at {docs_dir}. Falling back to redownloading doc store")
+        # Fallback for the case where user wants to use local files but they do not exist at docs_dir
+        logging.info("Downloading document store from GCS to %s", docs_dir)
         docs_dir.mkdir(parents=True, exist_ok=True)
         gcs_docs = GCSStorage(bucket_name=settings.docs_bucket_name, project=settings.google_cloud_project)
         n = gcs_docs.download_prefix(settings.folder_prefix, docs_dir)
@@ -69,11 +78,10 @@ def main() -> None:
     gcs_db = GCSStorage(bucket_name=settings.db_bucket_name, project=settings.google_cloud_project)
     prefix = str(config.vectorstore_gcs)
     for fname in ("index.faiss", "index.pkl"):
-        gcs_db.upload(index_dir / fname, f"{prefix}/{fname}")
+        gcs_db.upload(local= index_dir / fname, remote=f"{prefix}/{fname}")
 
     gcs_path = f"gs://{settings.db_bucket_name}/{prefix}/"
     logging.info("Index uploaded to %s", gcs_path)
-    print(gcs_path)
 
 
 if __name__ == "__main__":

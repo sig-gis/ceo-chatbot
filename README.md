@@ -281,9 +281,11 @@ uv run build-index
 This converts the source docs into a FAISS vector index that the chatbot
 searches at query time. It works as follows:
 
-1. **Docs**: checks `data/ceo-docs/` (configurable via `docs_path` in
-   `conf/base/rag_config.yml`) for existing RST files. If found, uses them.
-   If not, downloads them from GCS first.
+1. **Docs**: downloads the RST source docs from GCS into `data/ceo-docs/`
+   (configurable via `docs_path` in `conf/base/rag_config.yml`). Pass
+   `--local` / `-l` to skip the download and use whatever is already on disk
+   instead — useful when iterating locally without re-fetching files you
+   already have.
 2. **Index**: loads the docs, splits them into chunks, embeds each chunk
    using the HuggingFace model, and builds a FAISS index. Saves the result to
    `data/vectorstores/ceo_docs_faiss/` (configurable via `vectorstore_path`)
@@ -291,15 +293,6 @@ searches at query time. It works as follows:
 
 Run this any time you want to rebuild the index - for example, after step 1
 has synced new docs.
-
-If the source docs have changed in GCS and you want to pull the new copy,
-delete your local copy first so step 1 of the script will re-download:
-
-```bash
-rm -rf data/ceo-docs/
-```
-
-Replace `data/ceo-docs/` with your configured `docs_path` if you changed it.
 
 <!-- #### 3.1. Install dependencies
 
@@ -342,10 +335,22 @@ uv run --extra pipeline python scripts/build_index.py #--device mps|cpu|cuda
 
 If there are local data stores, it will not be resynced. Remove the existing corpus before running the above command. -->
 
-#### Device options
+#### Options
 
-The build-index command takes a `--device` flag that controls which hardware
-runs the embedding model (the slow part):
+**`--local` / `-l` — use local docs instead of downloading from GCS**
+
+| Flag | Behaviour |
+|------|-----------|
+| *(omitted)* | Default. Always downloads docs from GCS before building. |
+| `--local` | Uses the docs already in `data/ceo-docs/`. If that directory is empty, falls back to downloading from GCS and logs a warning. |
+
+Use `--local` when you're iterating on the index locally and the docs haven't changed — it skips the GCS round-trip and goes straight to embedding.
+
+```bash
+uv run build-index --local
+```
+
+**`--device` — which hardware runs the embedding model (the slow part)**
 
 | Flag | When to use |
 |------|-------------|
@@ -376,25 +381,25 @@ uv run build-index --device cpu
 
 #### What to expect
 
-The script logs each phase. On a first run (no local docs) you may see
-warnings about 'reference not found' (upstream doc cross-refs), translation
-warnings for missing locale files, and 'no avx2' if FAISS isn't using
-AVX2-optimized binaries:
+The script logs each phase. You may see warnings about 'reference not found'
+(upstream doc cross-refs), translation warnings for missing locale files, and
+'no avx2' if FAISS isn't using AVX2-optimized binaries — these are harmless.
+
+Default run (downloads docs from GCS every time):
 
 ```
 2026-04-30 12:00:01 - INFO - Using device: cpu
-2026-04-30 12:00:02 - INFO - No local docs at data/ceo-docs, downloading from GCS...
-2026-04-30 12:00:15 - INFO - Downloaded 312 files from gs://my-docs-bucket/collect-earth-online-doc/docs/source
+2026-04-30 12:00:02 - INFO - Downloaded 312 files from gs://my-docs-bucket/collect-earth-online-doc/docs/source
 2026-04-30 12:04:30 - INFO - Index saved to data/vectorstores/ceo_docs_faiss
 2026-04-30 12:04:31 - INFO - Index uploaded to gs://my-db-bucket/ceo-docs-faiss/
 gs://my-db-bucket/ceo-docs-faiss/
 ```
 
-On subsequent runs the docs download is skipped:
+With `--local` (skips the GCS download, uses docs already on disk):
 
 ```
 2026-04-30 12:00:01 - INFO - Using device: cpu
-2026-04-30 12:00:01 - INFO - Local docs found at data/ceo-docs, skipping GCS download
+2026-04-30 12:00:01 - INFO - Using local doc store at data/ceo-docs
 …
 ```
 
