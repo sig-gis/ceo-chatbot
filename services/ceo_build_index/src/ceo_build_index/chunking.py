@@ -62,14 +62,6 @@ def semantic_recursive_chunks(
     tokenizer = _get_tokenizer(config_path)
     text_splitter = recursive_splitter(config_path, chunk_size)
 
-    # Find the main document title
-    for doc in knowledge_base:
-        if doc.metadata.get("category") == "Title" and doc.metadata.get("category_depth") == 0:
-            main_document_title = doc.page_content.strip()
-            break
-
-    content_docs = [doc for doc in knowledge_base if not (doc.metadata.get("category") == "Title" and doc.metadata.get("category_depth") == 0)]
-
     # Helper to process and split a semantic chunk
     def process_semantic_chunk(elements):
         if not elements:
@@ -96,9 +88,15 @@ def semantic_recursive_chunks(
             )
             final_chunks.append(new_chunk)
 
-    # Iterate through docs to create semantic chunks
-    for doc in content_docs:
-        if doc.metadata.get("category") == "Title":
+    # Iterate through docs to create semantic chunks.
+    # Depth-0 titles mark a new RST file: flush the current chunk with the old title,
+    # then update main_document_title for all subsequent chunks.
+    for doc in knowledge_base:
+        if doc.metadata.get("category") == "Title" and doc.metadata.get("category_depth") == 0:
+            process_semantic_chunk(current_chunk_elements)
+            main_document_title = doc.page_content.strip()
+            current_chunk_elements = []
+        elif doc.metadata.get("category") == "Title":
             process_semantic_chunk(current_chunk_elements)
             current_chunk_elements = [doc]
         else:
