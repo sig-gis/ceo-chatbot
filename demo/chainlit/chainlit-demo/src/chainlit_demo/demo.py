@@ -4,7 +4,7 @@ import httpx
 import json
 
 SERVER_URL = "http://localhost:8080"
-TIMEOUT = 15
+TIMEOUT = 30
 
 @cl.set_starters
 async def set_starters():
