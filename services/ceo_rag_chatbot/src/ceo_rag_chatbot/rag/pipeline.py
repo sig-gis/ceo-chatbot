@@ -57,6 +57,7 @@ class RagService:
         if retriever is not None:
             self.retriever = retriever
         else:
+            # else block skipped during fastapi server as retriever is injected by lifespan.py 
             faiss_index = load_faiss_index(
                 index_dir=self.config.vectorstore_path,
                 embedding_model_name=self.config.embedding_model_name,

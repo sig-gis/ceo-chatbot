@@ -96,9 +96,9 @@ def semantic_recursive_chunks(
             process_semantic_chunk(current_chunk_elements)
             main_document_title = doc.page_content.strip()
             current_chunk_elements = []
-        elif doc.metadata.get("category") == "Title":
-            process_semantic_chunk(current_chunk_elements)
-            current_chunk_elements = [doc]
+        # elif doc.metadata.get("category") == "Title":
+        #     process_semantic_chunk(current_chunk_elements)
+        #     current_chunk_elements = [doc]
         else:
             current_chunk_elements.append(doc)
     
@@ -106,28 +106,3 @@ def semantic_recursive_chunks(
     process_semantic_chunk(current_chunk_elements)
 
     return final_chunks
-
-def split_documents(
-    knowledge_base: List[LangchainDocument],
-    chunk_size: int = 512,
-    config_path: str | Path = "conf/base/rag_config.yml"
-) -> List[LangchainDocument]:
-    """
-    Split documents into chunks of maximum size `chunk_size` tokens and return a list of documents.
-    Removes duplicate chunks based on text content.
-    """
-    text_splitter = recursive_splitter(config_path, chunk_size)
-
-    docs_processed: List[LangchainDocument] = []
-    for doc in knowledge_base:
-        docs_processed.extend(text_splitter.split_documents([doc]))
-
-    # Remove duplicates by page_content
-    seen = set()
-    unique_docs: List[LangchainDocument] = []
-    for doc in docs_processed:
-        if doc.page_content not in seen:
-            seen.add(doc.page_content)
-            unique_docs.append(doc)
-
-    return unique_docs

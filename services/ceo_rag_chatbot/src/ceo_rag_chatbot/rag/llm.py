@@ -130,7 +130,7 @@ class GeminiProvider(LLMProvider):
         self.client = genai.Client(api_key=api_key)
         
         if not model_choices:
-            self.model_choices = ["gemini-2.0-flash"]
+            self.model_choices = ["gemini-2.5-flash","gemini-2.0-flash"]
         else:
             self.model_choices = model_choices
         
@@ -159,7 +159,7 @@ class GeminiProvider(LLMProvider):
             "temperature": kwargs.get("temperature", 0.2),
             "max_output_tokens": max_tokens_to_generate,
             "response_mime_type": kwargs.get("response_mime_type",None) # allow caller of generate to set this (i.e. interpreter caller)
-            }
+        }
         
         models = self.model_choices
         last_exception = None
