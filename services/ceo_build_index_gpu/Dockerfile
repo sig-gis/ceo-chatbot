@@ -90,5 +90,8 @@ COPY conf/ conf/
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1
 
-# Force device to be cuda
-CMD ["build-index", "--device", "cuda"]
+# --device auto detects CUDA at runtime. Force cuda explicitly here because
+# this image exists specifically to run on GPU -- if CUDA is not available
+# something is wrong with the container runtime, and we want a loud failure
+# rather than a silent CPU fallback.
+CMD ["build-index-gpu", "--device", "cuda"]
