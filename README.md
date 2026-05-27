@@ -579,6 +579,17 @@ The `ceo-build-index-gpu` service runs the same indexing pipeline as `ceo-build-
 but uses `faiss-gpu-cu12` and a CUDA-enabled torch wheel. Use it when you have an NVIDIA
 GPU and want to cut embedding time down.
 
+> **Docker only.** You cannot run the GPU variant with `uv run build-index-gpu` outside
+> of Docker. The reason is that the workspace shares a single `uv.lock`, and because
+> `ceo-build-index` pins torch to the CPU wheel index, that CPU version of torch wins
+> for the entire workspace venv. When `uv sync --package ceo-build-index-gpu` runs
+> locally it still installs the CPU torch from the lockfile, so `--device cuda` fails
+> at runtime with "Torch not compiled with CUDA enabled".
+>
+> Inside the Docker image this is not a problem: the image runs
+> `uv sync --package ceo-build-index-gpu` in an isolated venv that has no CPU torch
+> pin competing with it, so the correct CUDA wheel is installed.
+
 #### CUDA 13 and newer
 
 PyTorch ships CUDA-enabled wheels directly to PyPI for CUDA 13+, so no extra configuration
@@ -597,7 +608,8 @@ docker run --rm --gpus all \
 
 #### CUDA 12.x and older
 
-You need to point the GPU package at the matching torch wheel index before building.
+You need to point the GPU package at the matching torch wheel index before building the
+image.
 
 1. Check your driver version: run `nvidia-smi`. The "CUDA Version" field in the top-right
    is the maximum CUDA version your driver supports.
@@ -618,10 +630,10 @@ You need to point the GPU package at the matching torch wheel index before build
    explicit = true
    ```
 
-4. Regenerate the lockfile and rebuild the image:
+4. Regenerate the lockfile, then rebuild the image:
 
    ```bash
-   uv sync --all-packages
+   uv lock
    docker build -f services/ceo_build_index_gpu/Dockerfile -t ceo-build-index-gpu:latest .
    ```
 
@@ -824,6 +836,51 @@ up, the UI retries every 15 seconds for up to 3 minutes before giving up.
 > for each `/chat` response) is the `TIMEOUT` constant at the top of
 > `demo/chainlit/chainlit-demo/src/chainlit_demo/demo.py`. The default is
 > 15 seconds. Raise it if the chatbot is slow to respond on your machine.
+
+### Running with Docker Compose
+
+`docker-compose.yml` at the repo root wires all three services together so you do not
+have to manage `docker run` flags by hand.
+
+**Start the chatbot** (the only long-running service; builds the image if needed):
+
+```bash
+docker compose up
+```
+
+**Run the CPU data pipeline** (ingest docs, then build the FAISS index):
+
+```bash
+docker compose --profile jobs up --exit-code-from pipeline
+```
+
+Both one-shot jobs run under the `jobs` profile so they never start accidentally with a
+plain `docker compose up`. `--exit-code-from pipeline` makes the command exit when the
+pipeline job finishes and forwards its exit code, which is useful in CI.
+
+**Run the GPU data pipeline** (same pipeline, CUDA-accelerated):
+
+```bash
+docker compose --profile jobs-gpu up --exit-code-from pipeline-gpu
+```
+
+**Run a single job** without the other:
+
+```bash
+docker compose --profile jobs run --rm ingest
+docker compose --profile jobs run --rm pipeline
+```
+
+**Rebuild images after code changes:**
+
+```bash
+docker compose build
+docker compose up --build
+```
+
+> **Note on credentials:** `GOOGLE_APPLICATION_CREDENTIALS` in `.env` must be an
+> absolute path. Docker Compose does not expand tilde (`~/...`). Use the full path,
+> for example `/home/yourname/.config/gcloud/application_default_credentials.json`.
 
 ### Common errors
 
