@@ -2,7 +2,6 @@ from pathlib import Path
 
 import yaml
 from pydantic import BaseModel, Field
-from typing import List
 
 
 class RAGConfig(BaseModel):

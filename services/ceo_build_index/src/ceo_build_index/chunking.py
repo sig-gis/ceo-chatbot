@@ -1,4 +1,3 @@
-from typing import List
 from pathlib import Path
 from langchain_core.documents import Document as LangchainDocument
 from langchain_text_splitters import TextSplitter, RecursiveCharacterTextSplitter

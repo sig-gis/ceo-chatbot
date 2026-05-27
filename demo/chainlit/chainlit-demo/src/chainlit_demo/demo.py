@@ -1,7 +1,6 @@
 import asyncio
 import chainlit as cl
 import httpx
-import json
 
 SERVER_URL = "http://localhost:8080"
 TIMEOUT = 30

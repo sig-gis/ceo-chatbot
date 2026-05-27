@@ -1,4 +1,3 @@
-import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List
@@ -90,7 +89,6 @@ def load_prompt_template(
       - role: user
         content: "..."
     """
-    prompt_file = prompt_file
     path = Path(prompt_file)
     data = load_yaml(path)
 

@@ -98,8 +98,7 @@ COPY conf/ conf/
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1
 
-# `build-index` accepts `--device {auto,cpu,cuda,mps}`. On this CPU-only
-# image, --device auto falls through to cpu (torch.cuda.is_available() is
-# False inside the container). Override via Cloud Run job args if you want
-# to force a value explicitly.
-CMD ["build-index"]
+# This image pins torch to the CPU wheel, so CUDA is never available. Pass
+# --device cpu explicitly rather than relying on auto-detection so the intent
+# is obvious to anyone reading the Dockerfile or docker inspect output.
+CMD ["build-index", "--device", "cpu"]

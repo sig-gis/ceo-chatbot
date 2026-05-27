@@ -19,8 +19,7 @@ dependencies = [
     "transformers",
     "sentence-transformers",
     "torch",
-    "faiss-cpu",
-    "unstructured[rst]",                                                                                
+    "unstructured[rst]",
     "ceo-chatbot-core"
 ]
 
@@ -40,4 +39,3 @@ build-index = "ceo_build_index.main:main"
 requires = ["uv_build>=0.11.6,<0.12.0"]
 build-backend = "uv_build"
 
-# TODO: Add GPU compatibility - https://docs.astral.sh/uv/guides/integration/pytorch/#configuring-accelerators-with-optional-dependencies
