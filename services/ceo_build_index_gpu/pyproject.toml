@@ -1,0 +1,39 @@
+[project]
+name = "ceo-build-index-gpu"
+version = "0.1.0"
+description = "GPU-accelerated variant of ceo-build-index. Uses faiss-gpu-cu12 and the CUDA-enabled torch wheel."
+readme = "README.md"
+authors = [
+    { name = "Arif Syraj", email = "126988341+arif-syr@users.noreply.github.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic",
+    "pydantic-settings",
+    "pyyaml",
+    "faiss-gpu-cu12",
+    "langchain-core",
+    "langchain-community",
+    "langchain-huggingface",
+    "langchain-text-splitters",
+    "transformers",
+    "sentence-transformers",
+    "torch",
+    "unstructured[rst]",
+    "ceo-chatbot-core"
+]
+
+# torch is pulled from PyPI with no custom index. PyPI ships CUDA-enabled wheels
+# for CUDA 13+. If your driver supports CUDA 12.x or older, add a [tool.uv.sources]
+# block and [[tool.uv.index]] entry pointing to the matching pytorch wheel index.
+# See the "GPU pipeline variant" section of README.md for step-by-step instructions.
+
+[tool.uv.sources]
+ceo_chatbot_core = {workspace = true}
+
+[project.scripts]
+build-index-gpu = "ceo_build_index_gpu.main:main"
+
+[build-system]
+requires = ["uv_build>=0.11.6,<0.12.0"]
+build-backend = "uv_build"

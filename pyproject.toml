@@ -17,6 +17,7 @@ members = [
     "packages/ceo_chatbot_core",
     "services/ceo_ingest_docs",
     "services/ceo_build_index",
+    "services/ceo_build_index_gpu",
     "services/ceo_rag_chatbot",
     "demo/chainlit/chainlit-demo",
 ]

@@ -34,6 +34,10 @@ map to three workspace members, plus a small shared library:
   (or from a local copy), builds a FAISS index, saves it locally, and uploads
   the index files to GCS. Installs a `build-index` command. Pinned to CPU
   PyTorch so the install stays small.
+- `services/ceo_build_index_gpu/` - GPU variant of the pipeline service. Same
+  pipeline logic, but pulls `faiss-gpu-cu12` and the CUDA-enabled torch wheel
+  instead of their CPU counterparts. Installs a `build-index-gpu` command.
+  See [GPU pipeline variant](#gpu-pipeline-variant) below for setup details.
 - `services/ceo_rag_chatbot/` - the **chatbot** service. Loads the RAG db, embeds queries, runs retrieval, and queries Gemini for inference. Installs a `chatbot` command. Pinned to CPU PyTorch so the install stays small.
 - `demo/chainlit/chainlit-demo/` - a Chainlit browser UI that proxies questions to the chatbot's FastAPI server. Instructions for running it are below.
 
@@ -70,6 +74,10 @@ ceo-chatbot/
 │   │   ├── Dockerfile
 │   │   ├── pyproject.toml
 │   │   └── src/ceo_build_index/
+│   ├── ceo_build_index_gpu/     # GPU variant of pipeline: same logic, CUDA deps
+│   │   ├── Dockerfile
+│   │   ├── pyproject.toml
+│   │   └── src/ceo_build_index_gpu/
 │   └── ceo_rag_chatbot/         # chatbot: FastAPI server + RAG pipeline
 │       ├── Dockerfile
 │       ├── pyproject.toml
@@ -564,6 +572,62 @@ docker run --rm \
   -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
   ceo-build-index:latest
 ```
+
+### GPU pipeline variant
+
+The `ceo-build-index-gpu` service runs the same indexing pipeline as `ceo-build-index`
+but uses `faiss-gpu-cu12` and a CUDA-enabled torch wheel. Use it when you have an NVIDIA
+GPU and want to cut embedding time down.
+
+#### CUDA 13 and newer
+
+PyTorch ships CUDA-enabled wheels directly to PyPI for CUDA 13+, so no extra configuration
+is needed. The Dockerfile by default sets the device to `cuda` to enforce gpu usage. Build
+ and run the image:
+
+```bash
+docker build -f services/ceo_build_index_gpu/Dockerfile -t ceo-build-index-gpu:latest .
+
+docker run --rm --gpus all \
+  --env-file .env \
+  -v "$HOME/.config/gcloud/application_default_credentials.json:/gcp/adc.json:ro" \
+  -e GOOGLE_APPLICATION_CREDENTIALS=/gcp/adc.json \
+  ceo-build-index-gpu:latest
+```
+
+#### CUDA 12.x and older
+
+You need to point the GPU package at the matching torch wheel index before building.
+
+1. Check your driver version: run `nvidia-smi`. The "CUDA Version" field in the top-right
+   is the maximum CUDA version your driver supports.
+
+2. Visit [pytorch.org/get-started/locally](https://pytorch.org/get-started/locally),
+   select **Linux**, **Pip**, and your CUDA version. Copy the index URL shown (for
+   example, `https://download.pytorch.org/whl/cu126` for CUDA 12.6).
+
+3. Open `services/ceo_build_index_gpu/pyproject.toml` and add:
+
+   ```toml
+   [tool.uv.sources]
+   torch = {index = "pytorch-cuda"}
+
+   [[tool.uv.index]]
+   name = "pytorch-cuda"
+   url = "https://download.pytorch.org/whl/cu126"   # replace with your version
+   explicit = true
+   ```
+
+4. Regenerate the lockfile and rebuild the image:
+
+   ```bash
+   uv sync --all-packages
+   docker build -f services/ceo_build_index_gpu/Dockerfile -t ceo-build-index-gpu:latest .
+   ```
+
+> **Note on Cloud Run Jobs:** GPU-enabled Cloud Run Jobs require a GPU machine type
+> in the job configuration. Credentials still come from the attached service account;
+> no ADC bind-mount is needed.
 
 ### Build the chatbot image
 

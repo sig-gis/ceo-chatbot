@@ -1,0 +1,90 @@
+import argparse
+import logging
+from pathlib import Path
+
+import torch
+
+from ceo_build_index_gpu.config import load_rag_config
+from ceo_build_index_gpu.settings import get_index_settings
+from ceo_build_index_gpu.chunking import semantic_recursive_chunks
+from ceo_build_index_gpu.index_builder import build_faiss_index
+from ceo_build_index_gpu.loaders import load_rst_docs
+from ceo_chatbot_core.storage import GCSStorage
+
+
+def _resolve_device(device: str) -> str:
+    if device != "auto":
+        return device
+    if torch.cuda.is_available():
+        return "cuda"
+    if torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
+
+
+def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s", force=True)
+    parser = argparse.ArgumentParser(description="Build FAISS index from docs and upload result to GCS.")
+    parser.add_argument(
+        "--device",
+        choices=["auto", "cpu", "cuda", "mps"],
+        default="auto",
+        help="Device for the embedding model (default: auto-detect)",
+    )
+    parser.add_argument(
+        "--local", "-l",
+        action="store_true",
+        help="Use local doc store instead of downloading from GCS. Pass this flag to use local store."
+    )
+    args = parser.parse_args()
+    use_local_store = args.local
+    logging.info("Using local doc store: %s", use_local_store)
+
+    device = _resolve_device(args.device)
+    logging.info("Using device: %s", device)
+
+    config = load_rag_config()
+    settings = get_index_settings()
+
+    # docs_path is set in conf/base/rag_config.yml under embeddings.docs_path
+    docs_dir = Path(config.docs_path)
+    local_docstore_exists = any(docs_dir.rglob("*.rst"))
+
+    # Use local docs if they exist; otherwise download from GCS
+    if use_local_store and local_docstore_exists:
+        logging.info("Local docs found at %s, skipping GCS download", docs_dir)
+    else:
+        if use_local_store and not local_docstore_exists:
+            logging.warning(
+                "--local flag supplied but no local doc store at %s. Falling back to redownloading doc store",
+                docs_dir
+            )
+        logging.info("Downloading document store from GCS to %s", docs_dir)
+        docs_dir.mkdir(parents=True, exist_ok=True)
+        gcs_docs = GCSStorage(bucket_name=settings.docs_bucket_name, project=settings.google_cloud_project)
+        n = gcs_docs.download_prefix(settings.folder_prefix, docs_dir)
+        logging.info("Downloaded %d files from gs://%s/%s", n, settings.docs_bucket_name, settings.folder_prefix)
+
+    # Load, chunk, embed, build FAISS index
+    raw_docs = load_rst_docs(str(docs_dir))
+    chunks = semantic_recursive_chunks(raw_docs, chunk_size=config.chunk_size)
+    index = build_faiss_index(chunks, device=device)
+
+    # vectorstore_path is set in conf/base/rag_config.yml under embeddings.vectorstore_path
+    index_dir = Path(config.vectorstore_path)
+    index_dir.mkdir(parents=True, exist_ok=True)
+    index.save_local(str(index_dir))
+    logging.info("Index saved to %s", index_dir)
+
+    # Upload index.faiss and index.pkl to GCS
+    gcs_db = GCSStorage(bucket_name=settings.db_bucket_name, project=settings.google_cloud_project)
+    prefix = str(config.vectorstore_gcs)
+    for fname in ("index.faiss", "index.pkl"):
+        gcs_db.upload(local=index_dir / fname, remote=f"{prefix}/{fname}")
+
+    gcs_path = f"gs://{settings.db_bucket_name}/{prefix}/"
+    logging.info("Index uploaded to %s", gcs_path)
+
+
+if __name__ == "__main__":
+    main()

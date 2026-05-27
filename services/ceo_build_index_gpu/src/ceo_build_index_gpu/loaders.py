@@ -1,0 +1,46 @@
+from typing import List
+from langchain_community.document_loaders import rst
+from langchain_core.documents import Document as LangchainDocument
+from pathlib import Path
+import glob
+
+
+def load_rst_docs(docs_dir: str = "data/ceo-docs") -> List[LangchainDocument]:
+    """
+    Load all .rst files in `docs_dir` into a list of Langchain Documents.
+
+    details:
+        Uses UnstructuredRSTLoader to parse RST files into elements.
+        Calculates and adds a ReadTheDocs URL to each document's metadata
+        based on its file path within the documentation structure.
+    """
+    base_url = "https://collect-earth-online-doc.readthedocs.io/en/latest/"
+    docs_path = Path(docs_dir)
+    rst_files = sorted(glob.glob(str(docs_path / "**/*.rst"), recursive=True))
+
+    rst_docs = []
+    for rst_file_str in rst_files:
+        rst_file = Path(rst_file_str)
+
+        try:
+            # Try to get path relative to 'source' if it exists in the path
+            if "source" in rst_file.parts:
+                source_idx = rst_file.parts.index("source")
+                rel_parts = rst_file.parts[source_idx + 1:]
+            else:
+                rel_parts = rst_file.relative_to(docs_path).parts
+
+            rel_url_path = "/".join(rel_parts).replace(".rst", ".html")
+            doc_url = f"{base_url}{rel_url_path}"
+        except Exception:
+            doc_url = base_url
+
+        loader = rst.UnstructuredRSTLoader(file_path=str(rst_file), mode="elements")
+        elements = loader.load()
+
+        for doc in elements:
+            doc.metadata["url"] = doc_url
+
+        rst_docs.extend(elements)
+
+    return rst_docs
