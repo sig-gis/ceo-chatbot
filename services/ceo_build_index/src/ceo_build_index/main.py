@@ -24,6 +24,9 @@ def _resolve_device(device: str) -> str:
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s", force=True)
+    # httpx logs every request at INFO; huggingface_hub fires many during model
+    # download. Silence those traces without touching our own INFO logs.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     parser = argparse.ArgumentParser(description="Build FAISS index from docs and upload result to GCS.")
     parser.add_argument(
         "--device",
