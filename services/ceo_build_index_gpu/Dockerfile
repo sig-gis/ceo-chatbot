@@ -12,12 +12,16 @@
 #   - local: bind-mount your ADC file and set GOOGLE_APPLICATION_CREDENTIALS
 #   - Cloud Run Job: credentials come from the attached service account
 #
-# torch is pulled from PyPI with no custom index. PyPI ships CUDA-enabled wheels
-# for CUDA 13+. If your driver is CUDA 12.x or older, see README.md for how to
-# point pyproject.toml at the right pytorch index and regenerate uv.lock.
+# torch CUDA build: the whole repo is one uv workspace with a single uv.lock,
+# and ceo-build-index pins torch to the CPU wheel index. uv resolves one torch
+# build for the entire workspace, so `uv sync` below installs +cpu torch even
+# here. A later step reinstalls the CUDA build from an explicit PyTorch index.
+# To target a different CUDA version, override TORCH_CUDA_INDEX at build time:
+#   docker build --build-arg TORCH_CUDA_INDEX=https://download.pytorch.org/whl/cu126 ...
 #
-# Run with GPU access locally:
-#   docker run --rm --gpus all --env-file .env ... ceo-build-index-gpu:latest
+# Run with GPU access locally (native Docker Engine + NVIDIA Container Toolkit;
+# Docker Desktop on Linux cannot access the host GPU):
+#   docker run --rm --device nvidia.com/gpu=all --env-file .env ... ceo-build-index-gpu:latest
 
 ARG UV_VERSION=0.11.6
 ARG PYTHON_VERSION=3.12
@@ -67,6 +71,14 @@ COPY services/ceo_rag_chatbot/pyproject.toml services/ceo_rag_chatbot/pyproject.
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --package ceo-build-index-gpu --frozen --no-dev --no-editable
+
+# Swap the CPU torch (installed from the lock above) for the CUDA build. 
+# --reinstall-package torch replaces only torch, pulling its
+# CUDA runtime deps (nvidia-*) fresh from the PyTorch index.
+ARG TORCH_CUDA_INDEX=https://download.pytorch.org/whl/cu128
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python /app/.venv/bin/python --reinstall-package torch \
+    torch==2.11.0 --index-url ${TORCH_CUDA_INDEX}
 
 # -- Stage 2: runtime ---------------------------------------------------------
 

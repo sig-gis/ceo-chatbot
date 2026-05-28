@@ -23,16 +23,16 @@ dependencies = [
     "ceo-chatbot-core"
 ]
 
-# torch is pulled from PyPI with no custom index. PyPI ships CUDA-enabled wheels
-# for CUDA 13+. If your driver supports CUDA 12.x or older, add a [tool.uv.sources]
-# block and [[tool.uv.index]] entry pointing to the matching pytorch wheel index.
-# See the "GPU pipeline variant" section of README.md for step-by-step instructions.
+# torch deliberately has no [tool.uv.sources] override here. The repo is one uv
+# workspace with a single uv.lock, and ceo-build-index pins torch to the CPU
+# wheel index; uv resolves one torch build for all members, so adding a CUDA
+# source here would be a workspace source conflict. Instead, the Docker image
+# reinstalls the CUDA torch build from an explicit PyTorch index after `uv sync`
+# (see TORCH_CUDA_INDEX in the Dockerfile).
 #
-# This package must be run inside its Docker image. Running `uv run build-index-gpu`
-# from the shared workspace venv will fail because the workspace lockfile resolves
-# torch to the CPU wheel (ceo-build-index pins it). The Docker image installs an
-# isolated venv where only this package's dep closure is present, so CUDA torch
-# is installed correctly.
+# Consequence: this package only works from its Docker image. `uv run
+# build-index-gpu` from the shared workspace venv installs the CPU torch from
+# the lockfile, so `--device cuda` fails with "Torch not compiled with CUDA".
 
 [tool.uv.sources]
 ceo_chatbot_core = {workspace = true}

@@ -580,62 +580,40 @@ but uses `faiss-gpu-cu12` and a CUDA-enabled torch wheel. Use it when you have a
 GPU and want to cut embedding time down.
 
 > **Docker only.** You cannot run the GPU variant with `uv run build-index-gpu` outside
-> of Docker. The reason is that the workspace shares a single `uv.lock`, and because
-> `ceo-build-index` pins torch to the CPU wheel index, that CPU version of torch wins
-> for the entire workspace venv. When `uv sync --package ceo-build-index-gpu` runs
-> locally it still installs the CPU torch from the lockfile, so `--device cuda` fails
-> at runtime with "Torch not compiled with CUDA enabled".
->
-> Inside the Docker image this is not a problem: the image runs
-> `uv sync --package ceo-build-index-gpu` in an isolated venv that has no CPU torch
-> pin competing with it, so the correct CUDA wheel is installed.
+> of Docker. The repo is one uv workspace with a single `uv.lock`, and because
+> `ceo-build-index` pins torch to the CPU wheel index, uv resolves one torch build for
+> the whole workspace — so the lockfile always installs CPU torch. Locally that means
+> `--device cuda` fails with "Torch not compiled with CUDA enabled". The Docker image
+> works around this by reinstalling the CUDA torch build from an explicit PyTorch index
+> after `uv sync` (see the `TORCH_CUDA_INDEX` build arg in the Dockerfile).
 
-#### CUDA 13 and newer
+#### Choosing the CUDA version
 
-PyTorch ships CUDA-enabled wheels directly to PyPI for CUDA 13+, so no extra configuration
-is needed. The Dockerfile by default sets the device to `cuda` to enforce gpu usage. Build
- and run the image:
+The Dockerfile installs the **cu128** torch wheel (CUDA 12.8) by default. To target a different CUDA version, check your driver's maximum CUDA version with `nvidia-smi` (the "CUDA Version" field, top-right), pick the matching index from [pytorch.org/get-started/locally](https://pytorch.org/get-started/locally), and pass it as a build arg — no file edits or `uv lock` needed:
+
+```bash
+docker build -f services/ceo_build_index_gpu/Dockerfile \
+  --build-arg TORCH_CUDA_INDEX=https://download.pytorch.org/whl/cu126 \
+  -t ceo-build-index-gpu:latest .
+```
+
+The Dockerfile sets the device to `cuda` by default to enforce GPU usage. Building the image for the first time will take several minutes as there are large libraries to download. Build and run:
 
 ```bash
 docker build -f services/ceo_build_index_gpu/Dockerfile -t ceo-build-index-gpu:latest .
 
-docker run --rm --gpus all \
+docker run --rm --device nvidia.com/gpu=all \
   --env-file .env \
   -v "$HOME/.config/gcloud/application_default_credentials.json:/gcp/adc.json:ro" \
   -e GOOGLE_APPLICATION_CREDENTIALS=/gcp/adc.json \
   ceo-build-index-gpu:latest
 ```
 
-#### CUDA 12.x and older
-
-You need to point the GPU package at the matching torch wheel index before building the
-image.
-
-1. Check your driver version: run `nvidia-smi`. The "CUDA Version" field in the top-right
-   is the maximum CUDA version your driver supports.
-
-2. Visit [pytorch.org/get-started/locally](https://pytorch.org/get-started/locally),
-   select **Linux**, **Pip**, and your CUDA version. Copy the index URL shown (for
-   example, `https://download.pytorch.org/whl/cu126` for CUDA 12.6).
-
-3. Open `services/ceo_build_index_gpu/pyproject.toml` and add:
-
-   ```toml
-   [tool.uv.sources]
-   torch = {index = "pytorch-cuda"}
-
-   [[tool.uv.index]]
-   name = "pytorch-cuda"
-   url = "https://download.pytorch.org/whl/cu126"   # replace with your version
-   explicit = true
-   ```
-
-4. Regenerate the lockfile, then rebuild the image:
-
-   ```bash
-   uv lock
-   docker build -f services/ceo_build_index_gpu/Dockerfile -t ceo-build-index-gpu:latest .
-   ```
+> **GPU access needs the native Docker Engine.** `--device nvidia.com/gpu=all` (or
+> `--gpus all`) only works on the native Docker Engine with the NVIDIA Container Toolkit
+> installed. If you see some weird problems with missing GPU's or CUDA drivers, it may be because it is not interacting with the native Docker Engine. 
+> For example, Docker Desktop on Linux runs its daemon in a VM that cannot see the host
+> GPU.
 
 > **Note on Cloud Run Jobs:** GPU-enabled Cloud Run Jobs require a GPU machine type
 > in the job configuration. Credentials still come from the attached service account;
