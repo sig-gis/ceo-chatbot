@@ -53,3 +53,82 @@ multiturn_prompt:
       Now here is my latest question (referencing our ongoing conversation above):
 
       Question: {question}
+
+interpretation_prompt:
+  - role: system
+    content: |
+      Analyze this question and determine the optimal response strategy. 
+      This analysis applies to both standalone questions (no history) and follow-up questions (with history).
+
+      CRITICAL: This is ONLY for analysis and routing. DO NOT generate answers. Answers will be generated separately.
+
+      CONVERSATION HISTORY:
+      {history_text}
+
+      CURRENT QUESTION: {question}
+
+      Your task is to understand what the user is actually asking and determine how to answer it effectively.
+
+      RESPONSE FORMAT: Return a valid JSON object with this exact structure:
+      ```json
+      {{
+          # Core question data
+          "original_question": str, # the original question passed in
+          "interpreted_question": str, # your interpretation of what the user is actually asking
+          
+          # Interpretation quality tracking
+          "interpreted_successfully": bool, # True if interpretation was successful, False otherwise
+          "interpretation_confidence": float, # How well did I understand?
+          "routing_confidence": float, # How confident in routing decision?
+
+          # Routing decision
+          "needs_retrieval": bool, # True if retrieval is needed, False otherwise
+          "search_query": Optional[str] = None, # if needs_retrieval=True, a search_query to be passed to vectordb retriever
+
+          # Context and metadata
+          "context_used": str = Field(pattern=r"^(standalone|enhanced)$"),  # "enhanced" if history is provided, else "standalone"
+          "reasoning": str, # Explain your reasoning for routing decision
+
+          # Optional rich metadata
+          "resolved_references": Optional[List[str]] = None,      # What references were resolved
+          "suggested_improvements": Optional[List[str]] = None   # Better ways to ask
+      }}
+      ```
+
+      ANALYSIS GUIDELINES:
+
+      CONTEXT QUALITY ASSESSMENT METRICS:
+      - We have pre-calculated objective metrics for you based on simple keyword heuristics. 
+      - Use these 3 objective, deterministic context quality metrics to aid you in your interpretaion work,
+
+      1. context quality score: {context_quality}/10 (score out of 10 rating context quality based on keyword matches)
+      2. Question intent: {question_intent} (one of: ['detail-seeking','repetition','information-seeking']))
+      3. In Technical Domain: {technical_domain} (bool)
+
+      - Their role is described in the following rules sections that follow:
+
+      CRITICAL RULES (Apply these rules strictly):
+      - If question intent is 'detail-seeking' or 'information-seeking' → needs_retrieval MUST be True
+      - If context quality < 6 → needs_retrieval MUST be True
+      - When in doubt, prefer setting needs_retrieval to True (pure follow-ups are assumed to be minority case)
+      - DO NOT generate answers - only analyze and route
+
+      DETAIL-SEEKING DETECTION:
+      - Questions with 'more', 'details', 'explain', 'how', 'why', 'benefits', 'advantages', 'process', 'steps' → retrieval needed
+      - Questions about 'benefits', 'advantages', 'disadvantages' → retrieval needed
+      - Questions asking 'what is the process for' → retrieval needed
+
+      CONTEXT QUALITY ASSESSMENT:
+      - If history contains < 3 technical terms → retrieval needed
+      - If question asks for specific procedures → retrieval needed
+      - If history is generic/summary-only → retrieval needed
+
+      TECHNICAL DOMAINS (prefer retrieval):
+      - Questions about: sampling, plots, imagery, coordinates, analysis
+      - Domain keywords: CEO, Collect Earth, GIS, remote sensing
+
+      REPETITION QUESTIONS (no retrieval needed):
+      - Contains: repeat, again, what did you say, summarize
+      - Examples: "Can you repeat that?", "What did you just say?", "I don't understand."
+
+      JSON RESPONSE:

@@ -93,7 +93,7 @@ class RagService:
         self.skip_interpretation = skip_interpretation
 
         # Initialize question interpreter for two-phase reasoning
-        self.interpreter = QuestionInterpreter(self.llm)
+        self.interpreter = QuestionInterpreter(self.llm, self.config.prompt_file)
 
     def _count_tokens(self, text: str) -> int:
         """

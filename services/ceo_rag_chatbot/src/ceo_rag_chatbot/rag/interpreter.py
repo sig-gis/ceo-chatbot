@@ -15,6 +15,7 @@ import json
 import logging
 import re
 from pydantic import BaseModel, Field, model_validator
+from ceo_rag_chatbot.config import load_prompt_template
 
 
 class Interpretation(BaseModel):
@@ -67,7 +68,7 @@ class QuestionInterpreter:
     3. Generate appropriate search queries or direct responses
     """
 
-    def __init__(self, llm_provider):
+    def __init__(self, llm_provider, prompt_file):
         """
         Initialize interpreter with shared LLM infrastructure.
 
@@ -75,6 +76,7 @@ class QuestionInterpreter:
             llm_provider: LLMProvider instance (shared with RagService)
         """
         self.llm = llm_provider
+        self.prompt_file = prompt_file
 
     def interpret_question(self, question: str, history: List[Dict[str, str]]) -> Interpretation:
         """
@@ -141,83 +143,20 @@ class QuestionInterpreter:
         context_quality = self._assess_context_quality_fast(history)
         question_intent = self._analyze_question_intent_fast(question)
         technical_domain = self._is_technical_domain_fast(question,history)
-        prompt = f"""Analyze this question and determine the optimal response strategy. 
-This analysis applies to both standalone questions (no history) and follow-up questions (with history).
+        interpretation_prompt_template = load_prompt_template(prompt_file=self.prompt_file, 
+                                                     prompt_key="interpretation_prompt")
+        interpretation_prompt_role = interpretation_prompt_template[0]["role"]
+        interpretation_prompt = interpretation_prompt_template[0]["content"]
+        interpretation_prompt = interpretation_prompt.format(
+            history_text = history_text,
+            question = question,
+            context_quality=context_quality,
+            question_intent=question_intent,
+            technical_domain=technical_domain
 
-CRITICAL: This is ONLY for analysis and routing. DO NOT generate answers. Answers will be generated separately.
-
-CONVERSATION HISTORY:
-{history_text}
-
-CURRENT QUESTION: {question}
-
-Your task is to understand what the user is actually asking and determine how to answer it effectively.
-
-RESPONSE FORMAT: Return a valid JSON object with this exact structure:
-```json
-{{
-    # Core question data
-    "original_question": str, # the original question passed in
-    "interpreted_question": str, # your interpretation of what the user is actually asking
-    
-    # Interpretation quality tracking
-    "interpreted_successfully": bool, # True if interpretation was successful, False otherwise
-    "interpretation_confidence": float, # How well did I understand?
-    "routing_confidence": float, # How confident in routing decision?
-
-    # Routing decision
-    "needs_retrieval": bool, # True if retrieval is needed, False otherwise
-    "search_query": Optional[str] = None, # if needs_retrieval=True, a search_query to be passed to vectordb retriever
-
-    # Context and metadata
-    "context_used": str = Field(pattern=r"^(standalone|enhanced)$"),  # "enhanced" if history is provided, else "standalone"
-    "reasoning": str, # Explain your reasoning for routing decision
-
-    # Optional rich metadata
-    "resolved_references": Optional[List[str]] = None,      # What references were resolved
-    "suggested_improvements": Optional[List[str]] = None   # Better ways to ask
-}}
-```
-
-ANALYSIS GUIDELINES:
-
-CONTEXT QUALITY ASSESSMENT METRICS:
-- We have pre-calculated objective metrics for you based on simple keyword heuristics. 
-- Use these 3 objective, deterministic context quality metrics to aid you in your interpretaion work,
-
-1. context quality score: {context_quality}/10 (score out of 10 rating context quality based on keyword matches)
-2. Question intent: {question_intent} (one of: ['detail-seeking','repetition','information-seeking']))
-3. In Technical Domain: {technical_domain} (bool)
-
-- Their role is described in the following rules sections that follow:
-
-CRITICAL RULES (Apply these rules strictly):
-- If question intent is 'detail-seeking' or 'information-seeking' → needs_retrieval MUST be True
-- If context quality < 6 → needs_retrieval MUST be True
-- When in doubt, prefer setting needs_retrieval to True (pure follow-ups are assumed to be minority case)
-- DO NOT generate answers - only analyze and route
-
-DETAIL-SEEKING DETECTION:
-- Questions with 'more', 'details', 'explain', 'how', 'why', 'benefits', 'advantages', 'process', 'steps' → retrieval needed
-- Questions about 'benefits', 'advantages', 'disadvantages' → retrieval needed
-- Questions asking 'what is the process for' → retrieval needed
-
-CONTEXT QUALITY ASSESSMENT:
-- If history contains < 3 technical terms → retrieval needed
-- If question asks for specific procedures → retrieval needed
-- If history is generic/summary-only → retrieval needed
-
-TECHNICAL DOMAINS (prefer retrieval):
-- Questions about: sampling, plots, imagery, coordinates, analysis
-- Domain keywords: CEO, Collect Earth, GIS, remote sensing
-
-REPETITION QUESTIONS (no retrieval needed):
-- Contains: repeat, again, what did you say, summarize
-- Examples: "Can you repeat that?", "What did you just say?", "I don't understand."
-
-JSON RESPONSE:"""
-
-        return prompt
+        )
+        
+        return interpretation_prompt
 
     def _parse_interpretation_response(self, response: str, original_question: str, history: List[Dict[str, str]]) -> Interpretation:
         """
