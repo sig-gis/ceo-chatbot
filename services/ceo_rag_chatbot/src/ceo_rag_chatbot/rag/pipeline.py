@@ -298,14 +298,12 @@ class RagService:
         # 2. Build context
         context = self._build_context(docs)
 
-        # Construct system content from base instructions + appropriate extensions
-        base_content = self.base_instructions[0]["content"]  # Extract content from message
+        # Construct system content by substituting base instructions into the template
+        base_content = self.base_instructions[0]["content"]
         if history:
-            # Add multiturn conversation extensions
-            system_content = base_content + "\n\n" + self.multiturn_messages[0]["content"]
+            system_content = self.multiturn_messages[0]["content"].format(base_instructions=base_content)
         else:
-            # Add single-turn specific extensions
-            system_content = base_content + "\n\n" + self.singleturn_messages[0]["content"]
+            system_content = self.singleturn_messages[0]["content"].format(base_instructions=base_content)
         base_system = {"role": "system", "content": system_content}
 
         # 3. Truncate history if necessary to fit context limit
