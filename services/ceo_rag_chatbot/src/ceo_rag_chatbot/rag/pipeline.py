@@ -148,12 +148,13 @@ class RagService:
         base_system_message: Dict[str, str]
     ) -> List[Dict[str, str]]:
         """
-        Truncates conversation history if the combined prompt would exceed the context limit.
+        Truncates conversation history to fit within the context token limit.
 
         details:
-            Builds a candidate prompt including system message, history, and current question.
-            Calculates token count and removes oldest history messages iteratively until
-            the total prompt fits within the model's maximum context tokens minus generation reserve.
+            Counts tokens once for the fixed parts (system + user message), then counts
+            each history message individually. Walks from newest to oldest, keeping the
+            longest tail of history that fits in the remaining budget. This avoids
+            rebuilding and recounting the full prompt on every dropped message.
 
         Args:
             history (List[Dict[str, str]]): List of previous message dictionaries with 'role' and 'content'.
@@ -164,36 +165,45 @@ class RagService:
         Returns:
             List[Dict[str, str]]: The truncated history list, containing only messages that fit within context limits.
         """
-        # Build the current user message content with retrieved context
-        # Use multiturn user template if history exists, otherwise singleturn
-        if history:
-            user_content = self.multiturn_messages[1]["content"].format(context=context, question=question)
-        else:
-            user_content = self.singleturn_messages[1]["content"].format(context=context, question=question)
+        # no history available, so nothing to truncate
+        if not history:
+            return []
 
-        # Construct full message list for candidate prompt
-        messages = [base_system_message] + history + [
+        user_content = self.multiturn_messages[1]["content"].format(context=context, question=question)
+
+        # Count tokens for fixed parts (system + user) in a single call
+        # This is the min number of tokens
+        base_prompt = self._apply_template([
+            base_system_message,
             {"role": "user", "content": user_content}
+        ])
+        base_tokens = self._count_tokens(base_prompt)
+
+        if base_tokens >= self.max_context_tokens:
+            return []
+
+        budget = self.max_context_tokens - base_tokens
+
+        # Count tokens per history message individually (each is a small input)
+        msg_tokens = [
+            self._count_tokens(f"{msg['role'].upper()}: {msg['content']}\n\n")
+            for msg in history
         ]
 
-        # Build candidate prompt and check token count
-        candidate_prompt = self._apply_template(messages)
-        token_count = self._count_tokens(candidate_prompt)
-
-        if token_count <= self.max_context_tokens:
+        # If there are tokens left in the budget, just return history
+        if sum(msg_tokens) <= budget:
             return history
 
-        # Remove oldest history messages until prompt fits
-        truncated_history = history[:]
-        while truncated_history and token_count > self.max_context_tokens:
-            truncated_history.pop(0)  # Remove oldest message
-            messages = [base_system_message] + truncated_history + [
-                {"role": "user", "content": user_content}
-            ]
-            candidate_prompt = self._apply_template(messages)
-            token_count = self._count_tokens(candidate_prompt)
+        # Walk newest to oldest, keep the longest tail of history that fits in budget
+        starting_message_index = len(history)
+        for i in range(len(history) - 1, -1, -1):
+            if budget < msg_tokens[i]:
+                break
+            budget -= msg_tokens[i]
+            # Update the starting index of the oldest message to keep
+            starting_message_index = i
 
-        return truncated_history
+        return history[starting_message_index:]
 
     def _build_context(self, docs: List[LangchainDocument]) -> str:
         """
