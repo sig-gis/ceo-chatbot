@@ -89,6 +89,17 @@ class RagService:
             prompt_file=self.config.prompt_file, prompt_key='multiturn_prompt'
         )
 
+        # Do the same for the case where no retrieval is required
+        self.base_instructions_no_retr = load_prompt_template(
+            prompt_file=self.config.prompt_file, prompt_key='noretrieve_base_instructions'
+        )
+        self.singleturn_messages_no_retr = load_prompt_template(
+            prompt_file=self.config.prompt_file, prompt_key='noretrieve_singleturn_prompt'
+        )
+        self.multiturn_messages_no_retr = load_prompt_template(
+            prompt_file=self.config.prompt_file, prompt_key='noretrieve_multiturn_prompt'
+        )
+
         # Store testing override settings
         self.skip_interpretation = skip_interpretation
 
@@ -320,27 +331,41 @@ class RagService:
         history: List[Dict[str, str]]
     ) -> str:
         """
-        Build prompt using conversation history and prompts.yml for history-based responses.
-        
-        details:
-            Creates a prompt for history-based generation without document retrieval.
-            Uses the interpreted question and conversation history to construct
-            the appropriate prompt structure.
+        Build a prompt for history-based responses without document retrieval.
+
+        Used when the interpreter decides no retrieval is needed (e.g. a follow-up
+        question that can be answered from the conversation history alone). Builds
+        the same message structure as _build_prompt_and_retrieve but with an empty
+        context and no retriever call.
 
         Args:
-            interpretation (Interpretation): Question interpretation results containing interpreted question.
-            history (List[Dict[str, str]]): List of previous conversation messages with 'role' and 'content'.
+            interpretation: Question interpretation containing the interpreted question.
+            history: Previous conversation turns as a list of role/content dicts.
 
         Returns:
-            str: Formatted prompt string for history-based generation.
+            Formatted prompt string ready to pass to the LLM.
         """
-        # Use conversation history and prompts.yml for answer generation
-        # Pass empty docs list to _build_prompt to avoid retrieval
-        prompt, docs, context, truncated_history = self._build_prompt(
-            interpretation.interpreted_question, history, 0, 0
-        )
+        question = interpretation.interpreted_question
 
-        return prompt
+        base_instructions = self.base_instructions_no_retr[0]["content"]
+        if history:
+            system_content = self.multiturn_messages_no_retr[0]["content"].format(base_instructions=base_instructions)
+        else:
+            system_content = self.singleturn_messages_no_retr[0]["content"].format(base_instructions=base_instructions)
+        base_system = {"role": "system", "content": system_content}
+
+        truncated_history = self._truncate_history(history, 
+                                                   context="", 
+                                                   question=question, 
+                                                   base_system_message=base_system)
+
+        if truncated_history:
+            user_content = self.multiturn_messages_no_retr[1]["content"].format(question=question)
+        else:
+            user_content = self.singleturn_messages_no_retr[1]["content"].format(question=question)
+
+        messages = [base_system] + truncated_history + [{"role": "user", "content": user_content}]
+        return self._apply_template(messages)
 
     def _standard_generation(
         self,
@@ -382,49 +407,6 @@ class RagService:
         """
         return self.llm.stream(prompt, max_output_tokens=self.default_max_output_tokens)
 
-    def _build_prompt(
-                      self,
-                      question: str,
-                      history: List[Dict[str, str]] = [],
-                      num_retrieved_docs: int = 30,
-                      num_docs_final: int = 5
-                      ) -> Tuple[str, List[LangchainDocument], str, List[Dict[str, str]]]:
-
-        # 1. Retrieve
-        docs = self.retriever(question, k=num_retrieved_docs)
-        docs = docs[:num_docs_final]
-
-        # 2. Build context
-        context = self._build_context(docs)
-
-        # Construct system content from base instructions + appropriate extensions
-        base_content = self.base_instructions[0]["content"]  # Extract content from message
-        if history:
-            # Add multiturn conversation extensions
-            system_content = base_content + "\n\n" + self.multiturn_messages[0]["content"]
-        else:
-            # Add single-turn specific extensions
-            system_content = base_content + "\n\n" + self.singleturn_messages[0]["content"]
-        base_system = {"role": "system", "content": system_content}
-
-        # 3. Truncate history if necessary to fit context limit
-        truncated_history = self._truncate_history(history, context, question, base_system)
-
-        # 4. Build conversational message list
-        # Use multiturn user template if history exists, otherwise singleturn
-        if truncated_history:
-            user_content = self.multiturn_messages[1]["content"].format(context=context, question=question)
-        else:
-            user_content = self.singleturn_messages[1]["content"].format(context=context, question=question)
-        messages = [base_system] + truncated_history + [
-            {"role": "user", "content": user_content}
-        ]
-
-        # 5. Apply chat template to get final prompt
-        prompt = self._apply_template(messages)
-        return prompt, docs, context, truncated_history
-         
-    
     def answer(
         self,
         question: str,
@@ -486,7 +468,7 @@ class RagService:
         else:
             # Route 2: History-based response
             if debug:
-                logging.info(f"[RAG DEBUG] Using conversation history for answer generation")
+                logging.info("[RAG DEBUG] Using conversation history for answer generation")
 
             # Build prompt using history
             prompt = self._build_prompt_from_history(interpretation, history)

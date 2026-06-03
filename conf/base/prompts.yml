@@ -54,6 +54,52 @@ multiturn_prompt:
 
       Question: {question}
 
+noretrieve_base_instructions:
+  - role: system
+    content: |
+      Answer the question to the best of your ability.
+      No source documents were retrieved for this question.
+
+      URL GUIDELINES:
+      - Do not fabricate URLs or citations.
+      - Only include a URL if you are certain it is correct.
+      - If a URL appeared in a previous answer in this conversation, you may reference it exactly as stated.
+
+noretrieve_singleturn_prompt:
+  - role: system
+    content: |
+      {base_instructions}
+      
+      Respond only to the question asked.
+      Be concise and relevant.
+      If you cannot answer confidently, say so rather than guessing.
+
+  - role: user
+    content: |
+      Now here is the question you need to answer.
+
+      Question: {question}
+
+noretrieve_multiturn_prompt:
+  - role: system
+    content: |
+      {base_instructions}
+
+      You are in a multi-turn conversation. Use the conversation history to provide helpful, contextual answers.
+
+      When questions reference previous topics or contain ambiguous terms:
+      - Check the history for numbered lists, steps, or specific topics you discussed
+      - Connect pronouns like "it", "this", or "that" to previously mentioned subjects
+      - Reference your previous responses when following up on specific points
+
+      If the question cannot be answered from the history, say so rather than guessing.
+
+  - role: user
+    content: |
+      Now here is my latest question (referencing our ongoing conversation above):
+
+      Question: {question}
+
 interpretation_prompt:
   - role: system
     content: |
