@@ -1,0 +1,113 @@
+# docker-compose.yml
+#
+# Orchestrates the three CEO chatbot services for local development.
+#
+# Usage:
+#
+#   Start the chatbot (default -- no profile needed):
+#     docker compose up
+#
+#   Run the full CPU pipeline (ingest then build-index), then exit:
+#     docker compose --profile jobs up --exit-code-from pipeline
+#
+#   Run the full GPU pipeline (ingest then build-index-gpu), then exit:
+#     docker compose --profile jobs-gpu up --exit-code-from pipeline-gpu
+#
+#   Run a single job:
+#     docker compose --profile jobs run --rm ingest
+#     docker compose --profile jobs run --rm pipeline
+#
+#   Rebuild images after code changes:
+#     docker compose build
+#     docker compose up --build
+#
+# Credentials:
+#   All three services need access to Google Cloud. The compose file reads
+#   GOOGLE_APPLICATION_CREDENTIALS from .env and mounts that file into each
+#   container at /gcp/adc.json. The value must be an absolute path -- tilde
+#   (~) is not expanded by Docker Compose.
+#
+#   Example .env entry (Linux/macOS):
+#     GOOGLE_APPLICATION_CREDENTIALS=/home/yourname/.config/gcloud/application_default_credentials.json
+
+services:
+  ingest:
+    build:
+      context: .
+      dockerfile: services/ceo_ingest_docs/Dockerfile
+    env_file: .env
+    volumes:
+      - "${GOOGLE_APPLICATION_CREDENTIALS}:/gcp/adc.json:ro"
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /gcp/adc.json
+    # ingest is a one-shot job. It runs in the "jobs" and "jobs-gpu" profiles
+    # so it can be shared as a prerequisite for both pipeline variants.
+    profiles: [jobs, jobs-gpu]
+    restart: "no"
+
+  pipeline:
+    build:
+      context: .
+      dockerfile: services/ceo_build_index/Dockerfile
+    env_file: .env
+    volumes:
+      - "${GOOGLE_APPLICATION_CREDENTIALS}:/gcp/adc.json:ro"
+      # Uncomment to reuse a locally cached doc store and avoid re-downloading
+      # from GCS on every run:
+      # - "./data:/app/data"
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /gcp/adc.json
+    profiles: [jobs]
+    restart: "no"
+    depends_on:
+      ingest:
+        condition: service_completed_successfully
+
+  pipeline-gpu:
+    build:
+      context: .
+      dockerfile: services/ceo_build_index_gpu/Dockerfile
+    env_file: .env
+    volumes:
+      - "${GOOGLE_APPLICATION_CREDENTIALS}:/gcp/adc.json:ro"
+      # - "./data:/app/data"
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /gcp/adc.json
+    profiles: [jobs-gpu]
+    restart: "no"
+    depends_on:
+      ingest:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  chatbot:
+    build:
+      context: .
+      dockerfile: services/ceo_rag_chatbot/Dockerfile
+    ports:
+      - "8080:8080"
+    env_file: .env
+    volumes:
+      - "${GOOGLE_APPLICATION_CREDENTIALS}:/gcp/adc.json:ro"
+      # Uncomment to reuse a locally cached FAISS index and skip the GCS download
+      # on startup:
+      # - "./data:/app/data"
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /gcp/adc.json
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - "CMD"
+        - "python"
+        - "-c"
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"
+      interval: 30s
+      timeout: 5s
+      start_period: 120s
+      retries: 6

@@ -86,10 +86,20 @@ ceo-chatbot/
 ├── demo/
 │   └── chainlit/
 │       └── chainlit-demo/       # Chainlit browser UI (talks to the FastAPI chatbot)
-├── notebooks/                   # development notebooks
-├── scripts/
-│   └── test_rag.py              # local RAG smoke test
-├── tests/                       # unit/integration tests
+├── scripts/                     # ad-hoc helper scripts
+├── tests/
+│   ├── app/                     # FastAPI route unit tests
+│   ├── build_index/             # pipeline unit tests
+│   ├── chatbot/                 # chatbot unit tests
+│   ├── core/                    # shared-library unit tests
+│   ├── ingest/                  # extract unit tests
+│   ├── test_storage.py          # GCSStorage.sync_up unit tests
+│   ├── test_rag.py              # live RAG smoke test (requires running chatbot)
+│   ├── simulate_conversation.py # end-to-end conversation simulation (requires live index)
+│   ├── test_ceo_docs_citations.py  # citation quality tests (requires live index)
+│   ├── test_collect_earth_scenarios.py  # scenario tests (requires live index)
+│   ├── test_utils.py            # shared mock utilities for the above live tests
+│   └── vector_db_exists.py      # checks whether the local FAISS index is present
 │
 ├── pyproject.toml               # workspace root (virtual — no installable package)
 ├── uv.lock                      # single lockfile for the whole workspace
@@ -278,7 +288,7 @@ arbitrary number):
 ```
 
 `uploaded` is files sent to GCS, `skipped` is files already up to date,
-`total` is the sum.  `total` is the sum. The CEO docs are pulled from openforis' CEO documentation on github, which is specified in `conf/base/rag_config.yml`
+`total` is their sum. The source repo is configured under `github:` in `conf/base/rag_config.yml`.
 
 ### 2. Build the search index
 
@@ -512,7 +522,7 @@ docker image ls ceo-build-index:latest
 
 The container needs the same `.env` you use for local development - specifically `GOOGLE_CLOUD_PROJECT`, `DOCS_BUCKET`, `DB_BUCKET`, `PREFIX`, and `HF_TOKEN` (the default embedding model is gated; see step 5 of first-time setup if you haven't generated a token yet). It also needs your Google Cloud credentials so it can read from `DOCS_BUCKET` and write to `DB_BUCKET`.
 
-The easiest way to supply credentials locally is the same pattern used for the extract image above: bind-mount your ADC file (created by `gcloud auth application-default login`) and point the container at it with `GOOGLE_APPLICATION_CREDENTIALS`. If you have already downloaded the document store locally,
+The easiest way to supply credentials locally is the same pattern used for the extract image above: bind-mount your ADC file (created by `gcloud auth application-default login`) and point the container at it with `GOOGLE_APPLICATION_CREDENTIALS`.
 
 **Linux / macOS:**
 
@@ -890,15 +900,22 @@ or firewall.
 
 ## Tests
 
-Run the full test suite with:
+Run the full unit test suite with:
 
 ```bash
-uv run pytest tests/
+uv run pytest
 ```
 
 You should see all tests pass with no errors. No GCS credentials, model
 downloads, or internet connection are required — all external services are
 replaced with fakes.
+
+The files at the root of `tests/` (`test_rag.py`, `simulate_conversation.py`,
+`test_ceo_docs_citations.py`, `test_collect_earth_scenarios.py`,
+`vector_db_exists.py`) are **live integration scripts**. They require a running
+chatbot or a local FAISS index and are not collected by `uv run pytest`. Run
+them directly with `uv run python tests/<filename>.py` when you want to
+exercise the full pipeline against real data.
 
 ### What is covered
 
