@@ -71,7 +71,7 @@ class RagService:
         self.llm: LLMProvider = reader_llm
         self.tokenizer: Optional[PreTrainedTokenizerBase] = tokenizer
 
-        # Get model\'s max input tokens and set context limit
+        # Get model's max input tokens and set context limit
         self.max_input_tokens = self.llm.max_context_tokens
         
         # Set default max output tokens for generation response from config

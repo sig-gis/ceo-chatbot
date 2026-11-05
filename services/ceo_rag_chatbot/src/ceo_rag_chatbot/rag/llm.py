@@ -11,6 +11,7 @@
 """
 
 import logging
+from abc import ABC, abstractmethod
 from typing import Iterable, Optional, Tuple, List
 import torch
 from transformers import (
@@ -26,20 +27,24 @@ from ceo_rag_chatbot.config import get_settings, ChatbotConfig
 
 
 
-class LLMProvider:
+class LLMProvider(ABC):
     """Base class for LLM providers."""
+    @abstractmethod
     def generate(self, prompt: str, **kwargs) -> str:
-        raise NotImplementedError
+        pass
 
+    @abstractmethod
     def stream(self, prompt: str, **kwargs) -> Iterable[str]:
-        raise NotImplementedError
+        pass
 
+    @abstractmethod
     def count_tokens(self, text: str) -> int:
-        raise NotImplementedError
+        pass
 
     @property
+    @abstractmethod
     def max_context_tokens(self) -> int:
-        raise NotImplementedError
+        pass
 
 
 class HuggingFaceProvider(LLMProvider):
