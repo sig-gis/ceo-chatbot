@@ -21,7 +21,8 @@ dependencies = [
     "ceo_chatbot_core",
     "langchain-community",
     "langchain-core",
-    "langchain-huggingface"
+    "langchain-huggingface",
+    "openai>=3.46.0",
 ]
 
 [tool.uv.sources]
