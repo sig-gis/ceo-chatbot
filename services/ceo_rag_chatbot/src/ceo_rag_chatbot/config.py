@@ -31,6 +31,18 @@ class ChatbotConfig(BaseModel):
 
     @model_validator(mode="after")
     def _active_model_exists(self):
+        """
+        Check that active_model names one of the entries under models.
+
+        Runs automatically when the config is created, so a typo in
+        rag_config.yml fails at startup instead of on the first chat request.
+
+        Returns:
+            ChatbotConfig: The config itself, unchanged.
+
+        Raises:
+            ValueError: If active_model is not a key in models. The message lists the valid names.
+        """
         if self.active_model not in self.models:
             raise ValueError(
                 f"active_model '{self.active_model}' is not one of the configured models: {list(self.models)}"
@@ -39,7 +51,12 @@ class ChatbotConfig(BaseModel):
 
     @property
     def llm(self) -> ModelConfig:
-        """The config entry for the model currently in use."""
+        """
+        The config entry for the model currently in use.
+
+        Returns:
+            ModelConfig: The entry under models named by active_model.
+        """
         return self.models[self.active_model]
 
 @lru_cache

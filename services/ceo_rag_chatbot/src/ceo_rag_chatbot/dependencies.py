@@ -5,11 +5,23 @@ from ceo_rag_chatbot.rag.local_probe import ModelState
 from ceo_rag_chatbot.rag.pipeline import RagService
 
 def get_rag(request: Request) -> RagService:
-    """Return the loaded RagService.
+    """
+    Return the loaded RagService for a route that needs it.
 
-    Raises 503 if lifespan hasn't finished yet, or if a local model is being
-    probed and isn't loaded in VRAM yet. Failing fast here gives the user a
-    clear message instead of a request that hangs until it times out.
+    details:
+        Failing fast here gives the user a clear message instead of a request
+        that hangs until it times out. Hosted models (model_state is None) only
+        need startup to have finished.
+
+    Args:
+        request (Request): The incoming request; used to read app.state.
+
+    Returns:
+        RagService: The service created at startup.
+
+    Raises:
+        HTTPException: 503 if startup hasn't finished, or if a local model is
+            being probed and isn't loaded in VRAM yet (the message includes its state).
     """
     if not getattr(request.app.state, "ready", False):
         raise HTTPException(status_code=503, detail="service still loading")

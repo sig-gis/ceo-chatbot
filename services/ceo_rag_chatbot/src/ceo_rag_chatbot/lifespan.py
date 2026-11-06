@@ -16,11 +16,23 @@ PROBE_INTERVAL_SECONDS = 5
 
 
 async def _poll_model_state(app: FastAPI, base_url: str, model: str) -> None:
-    """Re-check the local model's readiness every few seconds, forever.
+    """
+    Re-check the local model's readiness every few seconds, forever.
 
-    Stores the result in app.state.model_state, which get_rag and /healthz read.
-    Runs for the whole life of the server (not just startup) so the state stays
-    accurate if the inference server restarts or unloads the model.
+    details:
+        Stores the result in app.state.model_state, which get_rag and /healthz read,
+        and logs a line each time the state changes. Runs for the whole life of
+        the server (not just startup) so the state stays accurate if the
+        inference server restarts or unloads the model. Stopped by cancelling
+        its task when the server shuts down.
+
+    Args:
+        app (FastAPI): The app whose state is updated.
+        base_url (str): The local model's base_url from rag_config.yml.
+        model (str): The exact Ollama model name to look for.
+
+    Returns:
+        None: Never returns on its own; it runs until cancelled.
     """
     logger = logging.getLogger(__name__)
     with httpx.Client(timeout=5) as client:
