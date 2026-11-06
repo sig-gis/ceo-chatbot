@@ -1,13 +1,37 @@
+import asyncio
 import logging
 import time
 from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import FastAPI
 
 from ceo_rag_chatbot.config import get_settings, load_chatbot_config
+from ceo_rag_chatbot.rag.local_probe import ModelState, probe_model
 from ceo_rag_chatbot.rag.pipeline import RagService
 from ceo_rag_chatbot.rag.retriever import get_retriever, load_faiss_index
 from ceo_chatbot_core.storage import GCSStorage
+
+PROBE_INTERVAL_SECONDS = 5
+
+
+async def _poll_model_state(app: FastAPI, base_url: str, model: str) -> None:
+    """Re-check the local model's readiness every few seconds, forever.
+
+    Stores the result in app.state.model_state, which get_rag and /healthz read.
+    Runs for the whole life of the server (not just startup) so the state stays
+    accurate if the inference server restarts or unloads the model.
+    """
+    logger = logging.getLogger(__name__)
+    with httpx.Client(timeout=5) as client:
+        while True:
+            # probe_model uses blocking HTTP calls, so run it in a thread
+            # to keep the server free to answer requests meanwhile.
+            state = await asyncio.to_thread(probe_model, base_url, model, client)
+            if state != app.state.model_state:
+                logger.info("local model %s state: %s", model, state.value)
+            app.state.model_state = state
+            await asyncio.sleep(PROBE_INTERVAL_SECONDS)
 
 
 @asynccontextmanager
@@ -49,11 +73,26 @@ async def lifespan(app: FastAPI):
     rag = RagService(retriever=retriever)
 
     app.state.rag = rag
+
+    # For local models (probe: true), track readiness in the background so /chat
+    # can return a clear 503 while the model downloads or loads. Hosted models
+    # keep model_state=None and skip the check.
+    app.state.model_state = None
+    probe_task = None
+    if config.llm.probe:
+        app.state.model_state = ModelState.UNREACHABLE
+        probe_task = asyncio.create_task(
+            _poll_model_state(app, config.llm.base_url, config.llm.model)
+        )
+
     app.state.ready = True
 
     elapsed = time.monotonic() - t0
     logger.info("chatbot ready in %.1fs", elapsed)
 
     yield
+
+    if probe_task:
+        probe_task.cancel()
 
     # TODO: add cleanup here if RagService grows resources (open files, threads, etc.)

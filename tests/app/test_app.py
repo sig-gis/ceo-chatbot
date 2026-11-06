@@ -6,6 +6,7 @@ from starlette.testclient import TestClient
 
 from ceo_rag_chatbot.main import app
 from ceo_rag_chatbot.dependencies import get_rag
+from ceo_rag_chatbot.rag.local_probe import ModelState
 
 
 # ---------------------------------------------------------------------------
@@ -123,3 +124,33 @@ def test_get_rag_returns_rag_when_ready(mock_rag):
 
     result = get_rag(request)
     assert result is mock_rag
+
+
+# ---------------------------------------------------------------------------
+# Group 6: local model readiness gate
+# ---------------------------------------------------------------------------
+
+def _ready_app_with_model_state(mock_rag, state):
+    """App that finished startup, with no get_rag override so the real gate runs."""
+    app.state.ready = True
+    app.state.rag = mock_rag
+    app.state.model_state = state
+    return TestClient(app)
+
+
+def test_chat_503_while_local_model_not_loaded(mock_rag):
+    c = _ready_app_with_model_state(mock_rag, ModelState.DOWNLOADED)
+    response = c.post("/chat", json={"query": "What is CEO?"})
+    assert response.status_code == 503
+    assert "not ready yet (state: downloaded)" in response.json()["detail"]
+
+
+def test_chat_works_once_local_model_loaded(mock_rag):
+    c = _ready_app_with_model_state(mock_rag, ModelState.LOADED)
+    response = c.post("/chat", json={"query": "What is CEO?"})
+    assert response.status_code == 200
+
+
+def test_healthz_reports_local_model_state(mock_rag):
+    c = _ready_app_with_model_state(mock_rag, ModelState.SERVER_UP)
+    assert c.get("/healthz").json() == {"status": "ready", "model_state": "server_up"}

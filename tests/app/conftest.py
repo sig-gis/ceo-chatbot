@@ -55,6 +55,8 @@ def reset_app_state():
     # dependency_overrides is a dict FastAPI checks when resolving Depends();
     # clearing it ensures no mock from a previous test bleeds through.
     app.state.ready = False
+    # model_state=None means no local model probe is running (hosted models).
+    app.state.model_state = None
     app.dependency_overrides.clear()
 
 
