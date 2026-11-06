@@ -10,11 +10,10 @@
     Supports both single-turn and multi-turn conversations with automatic context management.
 """
 
-from typing import Callable, Dict, Generator, Iterable, List, Tuple, Optional
+from typing import Callable, Dict, Generator, Iterable, List, Tuple
 from pathlib import Path
 import logging
 from langchain_core.documents import Document as LangchainDocument
-from transformers import PreTrainedTokenizerBase
 from ceo_rag_chatbot.config import load_chatbot_config, load_prompt_template
 from ceo_rag_chatbot.rag.llm import get_reader_llm, LLMProvider
 from ceo_rag_chatbot.rag.retriever import load_faiss_index, get_retriever
@@ -32,7 +31,7 @@ class RagService:
         Initializes the RagService with configuration, model, and retriever setup.
 
         details:
-            Loads RAG configuration, initializes the language model and tokenizer,
+            Loads RAG configuration, initializes the language model,
             sets dynamic context limits, and prepares for conversation processing.
             Supports dependency injection of retriever for testing purposes.
 
@@ -64,12 +63,8 @@ class RagService:
             )
             self.retriever = get_retriever(faiss_index)
 
-        # Load LLM & tokenizer
-        reader_llm, tokenizer = get_reader_llm(
-            self.config,
-        )
-        self.llm: LLMProvider = reader_llm
-        self.tokenizer: Optional[PreTrainedTokenizerBase] = tokenizer
+        # Load LLM
+        self.llm: LLMProvider = get_reader_llm(self.config)
 
         # Get model's max input tokens and set context limit
         self.max_input_tokens = self.llm.max_context_tokens
@@ -124,21 +119,17 @@ class RagService:
 
     def _apply_template(self, messages: List[Dict[str, str]]) -> str:
         """
-        Applies chat template to messages.
+        Joins messages into one plain-text prompt ("ROLE: content" blocks).
+
+        The model server applies the model's own chat format on its side.
         """
-        if self.tokenizer:
-            return self.tokenizer.apply_chat_template(
-                messages, tokenize=False, add_generation_prompt=True
-            )
-        else:
-            # Fallback for providers without a HF tokenizer (like Gemini)
-            prompt = ""
-            for msg in messages:
-                role = msg["role"].upper()
-                content = msg["content"]
-                prompt += f"{role}: {content}\n\n"
-            prompt += "ASSISTANT: "
-            return prompt
+        prompt = ""
+        for msg in messages:
+            role = msg["role"].upper()
+            content = msg["content"]
+            prompt += f"{role}: {content}\n\n"
+        prompt += "ASSISTANT: "
+        return prompt
 
     def _truncate_history(
         self,

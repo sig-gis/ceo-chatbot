@@ -41,7 +41,7 @@ def test_unknown_active_model_is_rejected():
 def test_fallback_models_reuse_base_url_and_key(monkeypatch):
     monkeypatch.setenv("TEST_GEMINI_KEY", "secret")
     with patch("ceo_rag_chatbot.rag.llm.OpenAI") as openai_cls:
-        provider, _ = get_reader_llm(_config("gemini"))
+        provider = get_reader_llm(_config("gemini"))
     assert provider.models == ["gemini-2.5-flash", "gemini-2.0-flash"]
     kwargs = openai_cls.call_args.kwargs
     assert kwargs["base_url"] == "https://gemini.example/openai/"
@@ -56,7 +56,7 @@ def test_missing_api_key_env_names_the_variable(monkeypatch):
 
 def test_keyless_local_model_builds_without_a_key():
     with patch("ceo_rag_chatbot.rag.llm.OpenAI"):
-        provider, _ = get_reader_llm(_config("local"))
+        provider = get_reader_llm(_config("local"))
     assert provider.models == ["llama3.1:8b-instruct-q4_K_M"]
 
 

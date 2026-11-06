@@ -484,7 +484,6 @@ dependencies = [
     { name = "ceo-chatbot-core" },
     { name = "faiss-cpu" },
     { name = "fastapi", extra = ["standard"] },
-    { name = "google-genai" },
     { name = "langchain-community" },
     { name = "langchain-core" },
     { name = "langchain-huggingface" },
@@ -495,7 +494,6 @@ dependencies = [
     { name = "sentence-transformers" },
     { name = "torch", version = "2.11.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
     { name = "torch", version = "2.11.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
-    { name = "transformers" },
     { name = "uvicorn" },
 ]
 
@@ -504,7 +502,6 @@ requires-dist = [
     { name = "ceo-chatbot-core", editable = "packages/ceo_chatbot_core" },
     { name = "faiss-cpu" },
     { name = "fastapi", extras = ["standard"] },
-    { name = "google-genai" },
     { name = "langchain-community" },
     { name = "langchain-core" },
     { name = "langchain-huggingface" },
@@ -514,7 +511,6 @@ requires-dist = [
     { name = "pyyaml" },
     { name = "sentence-transformers", specifier = ">=5.1.2" },
     { name = "torch", index = "https://download.pytorch.org/whl/cpu" },
-    { name = "transformers" },
     { name = "uvicorn" },
 ]
 
@@ -931,15 +927,6 @@ wheels = [
 ]
 
 [[package]]
-name = "distro"
-version = "1.9.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/fc/f8/98eea607f65de6527f8a2e8885fc8015d3e6f5775df186e443e0964a11c3/distro-1.9.0.tar.gz", hash = "sha256:2fa77c6fd8940f116ee1d6b94a2f90b13b5ea8d019b98bc8bafdcabcdd9bdbed", size = 60722, upload-time = "2023-12-24T09:54:32.31Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/12/b3/231ffd4ab1fc9d679809f356cebee130ac7daa00d6d6f3206dd4fd137e9e/distro-1.9.0-py3-none-any.whl", hash = "sha256:7bffd925d65168f85027d8da9af6bddab658135b840670a223589bc0c8ef02b2", size = 20277, upload-time = "2023-12-24T09:54:30.421Z" },
-]
-
-[[package]]
 name = "dnspython"
 version = "2.8.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1302,11 +1289,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/ee/fc/2cdc74252746f547f81ff3f02d4d4234a3f411b5de5b61af97e633a060b9/google_auth-2.52.0-py3-none-any.whl", hash = "sha256:aee92803ba0ff93a70a3b8a35c7b4797837751cd6380b63ff38372b98f3ed627", size = 245614, upload-time = "2026-05-07T19:45:21.914Z" },
 ]
 
-[package.optional-dependencies]
-requests = [
-    { name = "requests" },
-]
-
 [[package]]
 name = "google-cloud-core"
 version = "2.6.0"
@@ -1358,27 +1340,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/56/15/c25671c7aad70f8179d858c55a6ae8404902abe0cdcf32a29d581792b491/google_crc32c-1.8.0-cp314-cp314-manylinux1_x86_64.manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:b0d1a7afc6e8e4635564ba8aa5c0548e3173e41b6384d7711a9123165f582de2", size = 33381, upload-time = "2025-12-16T00:40:26.268Z" },
     { url = "https://files.pythonhosted.org/packages/42/fa/f50f51260d7b0ef5d4898af122d8a7ec5a84e2984f676f746445f783705f/google_crc32c-1.8.0-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:8b3f68782f3cbd1bce027e48768293072813469af6a61a86f6bb4977a4380f21", size = 33734, upload-time = "2025-12-16T00:40:27.028Z" },
     { url = "https://files.pythonhosted.org/packages/08/a5/7b059810934a09fb3ccb657e0843813c1fee1183d3bc2c8041800374aa2c/google_crc32c-1.8.0-cp314-cp314-win_amd64.whl", hash = "sha256:d511b3153e7011a27ab6ee6bb3a5404a55b994dc1a7322c0b87b29606d9790e2", size = 34878, upload-time = "2025-12-16T00:35:23.142Z" },
-]
-
-[[package]]
-name = "google-genai"
-version = "2.0.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "anyio" },
-    { name = "distro" },
-    { name = "google-auth", extra = ["requests"] },
-    { name = "httpx" },
-    { name = "pydantic" },
-    { name = "requests" },
-    { name = "sniffio" },
-    { name = "tenacity" },
-    { name = "typing-extensions" },
-    { name = "websockets" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/44/ae/8504f6fa44aae887909c3fda1d49c6ffe129225b68f6f63b8904c49e7e90/google_genai-2.0.1.tar.gz", hash = "sha256:32cec7c07157c0e65e4dfc740e3288ff8e8bfc2d506cde49f884d79ed8377867", size = 537456, upload-time = "2026-05-09T01:37:12.693Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a1/20/7f427041c3660fabd4c396e80b27dd40b7d89b121ba384d69005a764910d/google_genai-2.0.1-py3-none-any.whl", hash = "sha256:5cb61ff5b8d33129bb7f5df0b5384ed2e71e5dd06ccc012cdbad28b070f6ce99", size = 791449, upload-time = "2026-05-09T01:37:10.841Z" },
 ]
 
 [[package]]
