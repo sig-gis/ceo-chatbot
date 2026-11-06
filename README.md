@@ -845,6 +845,59 @@ up, the UI retries every 15 seconds for up to 3 minutes before giving up.
 > `demo/chainlit/chainlit-demo/src/chainlit_demo/demo.py`. The default is
 > 15 seconds. Raise it if the chatbot is slow to respond on your machine.
 
+### Local LLM inference server (Ollama)
+
+The `local` model in `conf/base/rag_config.yml` runs on your own GPU through [Ollama](https://docs.ollama.com/docker), in its own container (`ceo-inference`). This keeps your questions on your machine and needs no API key. The default model, `llama3.1:8b-instruct-q4_K_M`, fits on a GPU with 8 GB of memory.
+
+**Prerequisite:** an NVIDIA GPU and the NVIDIA Container Toolkit, which lets Docker use the GPU. Follow the install steps in the Ollama Docker docs linked above. To check it works:
+
+```bash
+docker run --rm --gpus all ubuntu nvidia-smi
+```
+
+You should see a table listing your GPU.
+
+**Build the image** from the project root:
+
+```bash
+docker build -f services/ceo_inference/Dockerfile -t ceo-inference:latest .
+```
+
+**Run it:**
+
+```bash
+docker run --rm --gpus all \
+  -p 11434:11434 \
+  -v "$HOME/.ollama:/root/.ollama" \
+  -e OLLAMA_MODEL=llama3.1:8b-instruct-q4_K_M \
+  ceo-inference:latest
+```
+
+- `-v "$HOME/.ollama:/root/.ollama"` stores downloaded models in `~/.ollama` on your machine, so the model is only downloaded once.
+- `OLLAMA_MODEL` must match `models.local.model` in `rag_config.yml`.
+
+On the first run the model (about 5 GB) is downloaded. You should see:
+
+```
+Model llama3.1:8b-instruct-q4_K_M not in cache, downloading from the Ollama registry
+...
+Model llama3.1:8b-instruct-q4_K_M loaded into memory
+```
+
+On later runs the download is skipped:
+
+```
+Model llama3.1:8b-instruct-q4_K_M found in cache, skipping download
+```
+
+**Check the model is loaded**, from another terminal:
+
+```bash
+curl http://localhost:11434/api/ps
+```
+
+You should see JSON that lists `llama3.1:8b-instruct-q4_K_M` under `models`. The model stays loaded until the container stops.
+
 ### Running with Docker Compose
 
 `docker-compose.yml` at the repo root wires all three services together so you do not
