@@ -21,6 +21,7 @@ dependencies = [
     "langchain-core",
     "langchain-huggingface",
     "openai>=3.46.0",
+    "httpx>=0.28.1",
 ]
 
 [tool.uv.sources]
