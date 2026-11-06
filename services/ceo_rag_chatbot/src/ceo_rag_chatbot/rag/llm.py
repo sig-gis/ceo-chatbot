@@ -11,6 +11,7 @@
 """
 
 import logging
+import os
 from abc import ABC, abstractmethod
 from typing import Iterable, Optional, Tuple, List
 import torch
@@ -295,17 +296,31 @@ def get_reader_llm(
     config: ChatbotConfig
 ) -> Tuple[LLMProvider, Optional[PreTrainedTokenizerBase]]:
     """
-    Factory function to get the appropriate LLM provider.
+    Build an OpenAIProvider for the active model in rag_config.yml.
+
+    The API key is read from the env var named by `api_key_env`. Entries
+    without `api_key_env` (e.g. Ollama) get a placeholder key, because the
+    OpenAI client requires a value even when the server ignores it.
     """
-    framework_choices = ["gemini","huggingface"]
-    llm_framework = config.llm_framework.lower()
-    if llm_framework not in ["gemini","huggingface"]:
-        raise ValueError(f"llm_framework must be one of {framework_choices}, got {llm_framework}")
-    
-    model_choices = config.model_choices  # these are validated in each LLMProvider class's __init__
-    if llm_framework == "gemini":
-        provider = GeminiProvider(model_choices, max_output_tokens=config.max_output_tokens)
-        return provider, None
+    llm = config.llm
+    if llm.api_key_env:
+        # Read os.environ directly: pydantic reading .env doesn't populate os.environ,
+        # so the key must come from the real environment (docker --env-file, Cloud Run, etc.).
+        api_key = os.environ.get(llm.api_key_env)
+        if not api_key:
+            raise ValueError(
+                f"{llm.api_key_env} is not set, but model '{config.active_model}' needs it"
+            )
     else:
-        provider = HuggingFaceProvider(model_choices[0], max_output_tokens=config.max_output_tokens)
-        return provider, provider.tokenizer
+        api_key = "ollama"
+
+    provider = OpenAIProvider(
+        base_url=llm.base_url,
+        api_key=api_key,
+        models=[llm.model, *llm.fallback],
+        context_window=llm.context_window,
+        max_output_tokens=llm.max_output_tokens,
+        temperature=llm.temperature,
+        timeout=llm.timeout,
+    )
+    return provider, None

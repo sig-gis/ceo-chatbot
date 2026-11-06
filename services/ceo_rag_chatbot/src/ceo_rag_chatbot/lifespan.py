@@ -43,9 +43,9 @@ async def lifespan(app: FastAPI):
     faiss_index = load_faiss_index(config.vectorstore_path, config.embedding_model_name)
     retriever = get_retriever(faiss_index)
 
-    # RagService reads LLM settings from rag_config.yml and picks up GEMINI_API_KEY
-    # from the environment via GeminiInferenceSettings. The injected retriever
-    # bypasses its internal FAISS load.
+    # RagService reads the active model from rag_config.yml and its API key from
+    # the env var named by that model's api_key_env. We pass in the retriever
+    # built above, so RagService skips loading the FAISS index a second time.
     rag = RagService(retriever=retriever)
 
     app.state.rag = rag

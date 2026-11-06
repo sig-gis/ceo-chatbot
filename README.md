@@ -251,9 +251,27 @@ explaining what it's for. The values you'll need:
 - `DOCS_BUCKET` and `PREFIX` - where the source docs live in GCS.
 - `DB_BUCKET` - where the FAISS index gets uploaded.
 - `GEMINI_API_KEY` - from step 3.
+- `DEEPSEEK_API_KEY` - only needed if you choose the DeepSeek model (see step 8).
 - `HF_TOKEN` - from step 5.
 
 > **Never commit `.env`** and never copy it into Docker images.
+
+### 8. Choose which LLM to use
+
+The chatbot can use any model listed under `llm.models` in `conf/base/rag_config.yml`. The `active_model` setting picks which one. For example, to use DeepSeek instead of Gemini:
+
+```yaml
+llm:
+  active_model: deepseek-flash
+```
+
+Why this matters: each model needs its own API key. The `api_key_env` field of the chosen model names the variable in `.env` that must hold the key. Models without `api_key_env` (like `local`) need no key.
+
+If the key is missing, the chatbot stops at startup with an error like:
+
+```
+ValueError: DEEPSEEK_API_KEY is not set, but model 'deepseek-flash' needs it
+```
 
 ## Running on your laptop
 
@@ -664,6 +682,8 @@ GOOGLE_CLOUD_PROJECT=...
 DB_BUCKET=...
 HF_TOKEN=...
 ```
+
+`GEMINI_API_KEY` is for the default model. If you changed `active_model` (see "Choose which LLM to use"), set that model's key instead.
 
 It also needs your Google Cloud credentials so it can download the FAISS index from GCS. An earlier step - `gcloud auth application-default login` - creates an ADC file at `~/.config/gcloud/application_default_credentials.json`. Bind-mount this file to `/gcp/adc.json` and point the container at it with `GOOGLE_APPLICATION_CREDENTIALS`.
 

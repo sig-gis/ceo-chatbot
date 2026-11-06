@@ -1,9 +1,21 @@
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List
-from pydantic import BaseModel, Field
+from typing import Any, Dict, List, Optional
+from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from ceo_chatbot_core.yaml_utils import load_yaml
+
+class ModelConfig(BaseModel):
+    """One entry under `llm.models` in rag_config.yml: an OpenAI-compatible endpoint and model."""
+    base_url: str
+    model: str
+    api_key_env: Optional[str] = None  # name of the env var holding the key; None for keyless servers (Ollama)
+    context_window: int
+    max_output_tokens: int = 8192
+    temperature: float = 0.2
+    timeout: float = 60
+    fallback: List[str] = []  # extra model names tried in order on the same base_url and key
+    probe: bool = False  # check local server readiness at startup
 
 class ChatbotConfig(BaseModel):
     """
@@ -13,10 +25,22 @@ class ChatbotConfig(BaseModel):
     embedding_model_name: str
     vectorstore_path: Path
     vectorstore_gcs: Path
-    llm_framework: str
-    model_choices: List[str]
-    max_output_tokens: int = Field(gt=1024, description="this can also be configured downstream")
+    models: Dict[str, ModelConfig]
+    active_model: str
     prompt_file: Path
+
+    @model_validator(mode="after")
+    def _active_model_exists(self):
+        if self.active_model not in self.models:
+            raise ValueError(
+                f"active_model '{self.active_model}' is not one of the configured models: {list(self.models)}"
+            )
+        return self
+
+    @property
+    def llm(self) -> ModelConfig:
+        """The config entry for the model currently in use."""
+        return self.models[self.active_model]
 
 @lru_cache
 def load_chatbot_config(
@@ -38,9 +62,8 @@ def load_chatbot_config(
         embedding_model_name=embeddings["embedding_model_name"],
         vectorstore_path=embeddings.get("vectorstore_path", "data/vectorstores/ceo_docs_faiss"),
         vectorstore_gcs=embeddings.get("vectorstore_gcs", "ceo-docs-faiss"),
-        llm_framework=llm.get("llm_framework","gemini"),
-        model_choices=llm.get("model_choices",["gemini-2.5-flash"]),
-        max_output_tokens=llm.get("max_output_tokens", 8192),
+        models=llm["models"],
+        active_model=llm["active_model"],
         prompt_file=llm.get("prompt_file","conf/base/prompts.yml"),
     )
 
@@ -50,7 +73,6 @@ class ChatbotSettings(BaseSettings):
     Kept separate from AppSettings so the chatbot container does not need
     pipeline-specific variables (DB_BUCKET, DOCS_BUCKET, PREFIX, HF_TOKEN).
     """
-    gemini_api_key: str = Field(..., alias='GEMINI_API_KEY')
     # GCP project ID. storage.Client() requires this; it cannot be inferred
     # from user ADC credentials (only service-account keys embed a project).
     google_cloud_project: str = Field(..., alias="GOOGLE_CLOUD_PROJECT")

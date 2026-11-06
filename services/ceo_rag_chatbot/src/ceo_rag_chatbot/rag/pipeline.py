@@ -75,7 +75,7 @@ class RagService:
         self.max_input_tokens = self.llm.max_context_tokens
         
         # Set default max output tokens for generation response from config
-        self.default_max_output_tokens = self.config.max_output_tokens
+        self.default_max_output_tokens = self.config.llm.max_output_tokens
         self.max_context_tokens = self.max_input_tokens - self.default_max_output_tokens
 
         # Load base instructions and prompt extensions
