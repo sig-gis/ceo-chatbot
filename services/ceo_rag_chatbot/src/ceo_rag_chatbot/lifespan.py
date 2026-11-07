@@ -54,6 +54,10 @@ async def lifespan(app: FastAPI):
     config = load_chatbot_config()
 
     logging.basicConfig(level=settings.log_level)
+    # httpx logs every request at INFO. The local model readiness check makes
+    # 3 requests every 5 seconds, which buries useful logs, so only show httpx
+    # warnings and errors. State changes are still logged by _poll_model_state.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     logger = logging.getLogger(__name__)
 
     # Download index.faiss and index.pkl from GCS into the local directory.
