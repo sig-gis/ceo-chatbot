@@ -843,7 +843,9 @@ up, the UI retries every 15 seconds for up to 3 minutes before giving up.
 > **Adjusting the timeout:** the per-request timeout (how long the UI waits
 > for each `/chat` response) is the `TIMEOUT` constant at the top of
 > `demo/chainlit/chainlit-demo/src/chainlit_demo/demo.py`. The default is
-> 15 seconds. Raise it if the chatbot is slow to respond on your machine.
+> 120 seconds, to leave room for slower local models. Raise it if the chatbot
+> is slow to respond on your machine. If the chatbot returns an error (for
+> example the local model is not loaded yet), the UI shows the chatbot's message.
 
 ### Local LLM inference server (Ollama)
 
