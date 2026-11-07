@@ -8,6 +8,12 @@ set -euo pipefail
 ollama serve &
 server_pid=$!
 
+# Stop the server when the container is stopped (Ctrl+C or docker stop).
+# Bash running as the container's first process ignores these signals unless it
+# handles them, so without this Docker waits 10 seconds and then force-kills it.
+# 143 is the usual exit code for "stopped by TERM" (128 + 15).
+trap 'kill -TERM "$server_pid" 2>/dev/null; exit 143' INT TERM
+
 # The image has no curl, so use the CLI to wait: `ollama list` fails until the server answers.
 until ollama list >/dev/null 2>&1; do sleep 1; done
 
@@ -18,12 +24,15 @@ if grep -Fxq "$OLLAMA_MODEL" <<< "$cached_models"; then
   echo "Model $OLLAMA_MODEL found in cache, skipping download"
 else
   echo "Model $OLLAMA_MODEL not in cache, downloading from the Ollama registry"
-  ollama pull "$OLLAMA_MODEL"
+  # Run in the background and wait: bash only handles a stop signal between
+  # commands, so a plain foreground pull would delay stopping until the download ends.
+  ollama pull "$OLLAMA_MODEL" & wait $!
 fi
 
 # An empty prompt loads the model without generating anything (Ollama FAQ: "preload a model").
 # OLLAMA_KEEP_ALIVE=-1 (set in the Dockerfile) keeps it loaded afterwards.
-ollama run "$OLLAMA_MODEL" ""
+# Backgrounded for the same reason as the pull above.
+ollama run "$OLLAMA_MODEL" "" & wait $!
 echo "Model $OLLAMA_MODEL loaded into memory"
 
 # Keep the container running for as long as the server runs.
