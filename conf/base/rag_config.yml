@@ -42,7 +42,8 @@ llm:
       context_window: 1048576
       max_output_tokens: 8192
     local:
-      base_url: http://localhost:11434/v1
+      # base_url: http://localhost:11434/v1
+      base_url: http://inference:11434/v1
       model: llama3.1:8b-instruct-q4_K_M
       context_window: 131072
       probe: true              # liveness check at startup
