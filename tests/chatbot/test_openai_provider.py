@@ -49,3 +49,17 @@ def test_generate_raises_last_error_when_all_models_fail(client):
 def test_stream_yields_chunks_in_order(client):
     client.chat.completions.create.return_value = iter([_chunk("a"), _chunk("b"), _chunk(None)])
     assert list(_provider().stream("hi")) == ["a", "b"]
+
+
+def test_json_output_sends_json_mode_when_model_supports_it(client):
+    client.chat.completions.create.return_value = _completion("{}")
+    provider = OpenAIProvider(base_url="http://example/v1", api_key="k", models=["m"],
+                              context_window=1000, json_mode=True)
+    provider.generate("hi", json_output=True)
+    assert client.chat.completions.create.call_args.kwargs["response_format"] == {"type": "json_object"}
+
+
+def test_json_output_ignored_when_model_does_not_support_it(client):
+    client.chat.completions.create.return_value = _completion("{}")
+    _provider().generate("hi", json_output=True)
+    assert "response_format" not in client.chat.completions.create.call_args.kwargs

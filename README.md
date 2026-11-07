@@ -265,6 +265,8 @@ llm:
   active_model: deepseek-flash
 ```
 
+`json_mode: true` tells the chatbot the provider supports JSON output mode, which makes the question-interpretation step faster and more reliable. Only set it if the provider's docs say it supports `response_format` `json_object`; some providers (for example Anthropic) reject it.
+
 Why this matters: each model needs its own API key. The `api_key_env` field of the chosen model names the variable in `.env` that must hold the key. Models without `api_key_env` (like `local`) need no key.
 
 If the key is missing, the chatbot stops at startup with an error like:

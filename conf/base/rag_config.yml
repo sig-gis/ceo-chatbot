@@ -23,6 +23,7 @@ llm:
       api_key_env: DEEPSEEK_API_KEY
       context_window: 1000000
       max_output_tokens: 8192
+      json_mode: true          # JSON output mode for the interpreter
     anthropic:
       base_url: https://api.anthropic.com/v1/
       model: claude-sonnet-5-5
@@ -35,18 +36,21 @@ llm:
       api_key_env: OPENAI_API_KEY
       context_window: 1050000
       max_output_tokens: 8192
+      json_mode: true          # JSON output mode for the interpreter
     kimi:
       base_url: https://api.moonshot.ai/v1
       model: kimi-k3.1-pro
       api_key_env: MOONSHOT_API_KEY
       context_window: 1048576
       max_output_tokens: 8192
+      json_mode: true          # JSON output mode for the interpreter
     local:
       # base_url: http://localhost:11434/v1
       base_url: http://inference:11434/v1
       model: llama3.1:8b-instruct-q4_K_M
       context_window: 131072
       probe: true              # liveness check at startup
+      json_mode: true          # JSON output mode for the interpreter
       # no api_key_env - keyless (Ollama ignores the key)
   active_model: local
 

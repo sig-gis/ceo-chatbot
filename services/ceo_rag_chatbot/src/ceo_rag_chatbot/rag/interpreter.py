@@ -99,7 +99,7 @@ class QuestionInterpreter:
                 # while this would be smart to do, cannot seem to set a safe upper token limit that does not cut off generated interpretation reponses especially when input prmprt is larger (long convos/questions)
                 # "max_output_tokens":1024, # Optimized for JSON output - 
                 "temperature":0.1, # deterministic
-                "response_mime_type": "application/json" # ensure response is parseable JSON
+                "json_output": True # use JSON mode if the model supports it (json_mode in rag_config.yml)
                 } 
             response = self.llm.generate(
                 prompt,

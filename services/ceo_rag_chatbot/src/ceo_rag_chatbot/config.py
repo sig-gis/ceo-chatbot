@@ -16,6 +16,7 @@ class ModelConfig(BaseModel):
     timeout: float = 60
     fallback: List[str] = []  # extra model names tried in order on the same base_url and key
     probe: bool = False  # check local server readiness at startup
+    json_mode: bool = False  # server supports response_format json_object; check the provider's docs first
 
 class ChatbotConfig(BaseModel):
     """

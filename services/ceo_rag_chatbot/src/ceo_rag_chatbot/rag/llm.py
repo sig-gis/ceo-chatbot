@@ -85,7 +85,8 @@ class OpenAIProvider(LLMProvider):
     in order and re-raises the last error if all of them fail.
     """
     def __init__(self, base_url: str, api_key: str, models: List[str], context_window: int,
-                 max_output_tokens: int = 8192, temperature: float = 0.2, timeout: float = 60):
+                 max_output_tokens: int = 8192, temperature: float = 0.2, timeout: float = 60,
+                 json_mode: bool = False):
         """
         Create an OpenAI SDK client pointed at the given server.
 
@@ -99,12 +100,15 @@ class OpenAIProvider(LLMProvider):
             max_output_tokens (int): Default cap on answer length, in tokens.
             temperature (float): Default randomness of answers (lower is more predictable).
             timeout (float): Seconds to wait for a response before giving up.
+            json_mode (bool): True if the server supports response_format json_object.
+                Only then is a json_output=True request sent in JSON mode.
         """
         self.client = OpenAI(base_url=base_url, api_key=api_key, timeout=timeout)
         self.models = models
         self._max_context = context_window
         self.max_output_tokens = max_output_tokens
         self.temperature = temperature
+        self.json_mode = json_mode
 
     def _inference_with_fallback(self, prompt: str, stream: bool, **kwargs):
         """
@@ -114,12 +118,15 @@ class OpenAIProvider(LLMProvider):
             The prompt is sent as a single user message. For streaming, the whole
             answer is collected before returning, so a model that fails halfway
             falls back cleanly instead of returning a partial answer.
-            Unknown kwargs (e.g. Gemini's response_mime_type) are ignored on purpose.
+            json_output=True asks for JSON mode, which makes the model return
+            valid JSON only. It is sent only if this model supports it
+            (json_mode); otherwise the request goes out as plain text.
+            Unknown kwargs are ignored on purpose.
 
         Args:
             prompt (str): The complete prompt text to send.
             stream (bool): True to use the streaming API, False for a single response.
-            **kwargs: Optional overrides: max_output_tokens, temperature.
+            **kwargs: Optional overrides: max_output_tokens, temperature, json_output.
 
         Returns:
             str | List[str]: The full answer when stream is False, or the list of
@@ -128,6 +135,12 @@ class OpenAIProvider(LLMProvider):
         Raises:
             Exception: The last model's error, if every model fails.
         """
+        extra = {}
+        if kwargs.get("json_output") and self.json_mode:
+            # Only add response_format when supported: some servers (e.g. Anthropic)
+            # reject json_object with a 400 error.
+            extra["response_format"] = {"type": "json_object"}
+
         last_exception = None
         for model in self.models:
             try:
@@ -137,6 +150,7 @@ class OpenAIProvider(LLMProvider):
                     max_tokens=kwargs.get("max_output_tokens", self.max_output_tokens),
                     temperature=kwargs.get("temperature", self.temperature),
                     stream=stream,
+                    **extra,
                 )
                 if not stream:
                     return response.choices[0].message.content
@@ -154,7 +168,7 @@ class OpenAIProvider(LLMProvider):
 
         Args:
             prompt (str): The complete prompt text to send.
-            **kwargs: Optional overrides: max_output_tokens, temperature.
+            **kwargs: Optional overrides: max_output_tokens, temperature, json_output.
 
         Returns:
             str: The model's answer.
@@ -173,7 +187,7 @@ class OpenAIProvider(LLMProvider):
 
         Args:
             prompt (str): The complete prompt text to send.
-            **kwargs: Optional overrides: max_output_tokens, temperature.
+            **kwargs: Optional overrides: max_output_tokens, temperature, json_output.
 
         Yields:
             str: Pieces of the answer, in order.
@@ -249,4 +263,5 @@ def get_reader_llm(config: ChatbotConfig) -> LLMProvider:
         max_output_tokens=llm.max_output_tokens,
         temperature=llm.temperature,
         timeout=llm.timeout,
+        json_mode=llm.json_mode,
     )
