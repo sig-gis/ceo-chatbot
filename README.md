@@ -909,6 +909,22 @@ have to manage `docker run` flags by hand.
 docker compose up
 ```
 
+**Start the chatbot with the local LLM** (needs an NVIDIA GPU; see [Local LLM inference server (Ollama)](#local-llm-inference-server-ollama) for prerequisites):
+
+```bash
+docker compose --profile local-llm up
+```
+
+This also starts the `inference` service, the Ollama server the `local` model in `conf/base/rag_config.yml` points at. Set `active_model: local` in that file first. The first start downloads the model (about 5 GB) into `~/.ollama`. You should see `Model ... loaded into memory` from `inference-1`, then `local model ... state: loaded` from `chatbot-1`.
+
+**Switch models without rebuilding.** `conf/` is mounted into the chatbot container, so edit `active_model` in `conf/base/rag_config.yml` and restart only the chatbot:
+
+```bash
+docker compose restart chatbot
+```
+
+Why this matters: the chatbot reads the config once at startup, so a restart is needed, but no image rebuild. If you switch to `local`, start the inference server first with `docker compose --profile local-llm up -d inference`.
+
 **Run the CPU data pipeline** (ingest docs, then build the FAISS index):
 
 ```bash
