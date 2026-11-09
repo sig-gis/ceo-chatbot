@@ -7,6 +7,13 @@
 #   Start the chatbot (default -- no profile needed):
 #     docker compose up
 #
+#   Start the chatbot plus the local Ollama inference server (needs an NVIDIA GPU):
+#     docker compose --profile local-llm up
+#
+#   Switch the chatbot's model without rebuilding: edit active_model in
+#   conf/base/rag_config.yml (mounted into the container), then:
+#     docker compose restart chatbot
+#
 #   Run the full CPU pipeline (ingest then build-index), then exit:
 #     docker compose --profile jobs up --exit-code-from pipeline
 #
@@ -70,6 +77,8 @@ services:
     env_file: .env
     volumes:
       - "${GOOGLE_APPLICATION_CREDENTIALS}:/gcp/adc.json:ro"
+      # Reuse the host's HuggingFace cache so the embedding model is downloaded once.
+      - "${HOME}/.cache/huggingface:/root/.cache/huggingface"
       # - "./data:/app/data"
     environment:
       GOOGLE_APPLICATION_CREDENTIALS: /gcp/adc.json
@@ -95,8 +104,13 @@ services:
     env_file: .env
     volumes:
       - "${GOOGLE_APPLICATION_CREDENTIALS}:/gcp/adc.json:ro"
-      # Uncomment to reuse a locally cached FAISS index and skip the GCS download
-      # on startup:
+      # Mount the config so changing active_model only needs
+      # `docker compose restart chatbot`, not an image rebuild.
+      - "./conf:/app/conf:ro"
+      # Reuse the host's HuggingFace cache so the embedding model is downloaded once.
+      - "${HOME}/.cache/huggingface:/root/.cache/huggingface"
+      # Uncomment to keep the downloaded FAISS index in ./data on the host. The
+      # chatbot still downloads the index from GCS on every start.
       # - "./data:/app/data"
     environment:
       GOOGLE_APPLICATION_CREDENTIALS: /gcp/adc.json
@@ -111,3 +125,28 @@ services:
       timeout: 5s
       start_period: 120s
       retries: 6
+
+  # Local LLM server (Ollama). Only starts with --profile local-llm, so people
+  # using a hosted model never start a GPU container. The chatbot reaches it at
+  # http://inference:11434/v1 (models.local.base_url in rag_config.yml).
+  inference:
+    build:
+      context: .
+      dockerfile: services/ceo_inference/Dockerfile
+    ports:
+      - "11434:11434"
+    volumes:
+      # Keep downloaded models on the host so each model is downloaded once.
+      - "${HOME}/.ollama:/root/.ollama"
+    environment:
+      # Must match models.local.model in conf/base/rag_config.yml.
+      OLLAMA_MODEL: llama3.1:8b-instruct-q4_K_M
+    profiles: [local-llm]
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

@@ -55,6 +55,8 @@ def reset_app_state():
     # dependency_overrides is a dict FastAPI checks when resolving Depends();
     # clearing it ensures no mock from a previous test bleeds through.
     app.state.ready = False
+    # model_state=None means no local model probe is running (hosted models).
+    app.state.model_state = None
     app.dependency_overrides.clear()
 
 
@@ -63,7 +65,7 @@ def mock_rag():
     """Create a fake RagService for use in tests.
 
     RagService is the class that wraps the LLM + retriever pipeline. In
-    production it loads a FAISS index and calls the Gemini API. Here we
+    production it loads a FAISS index and calls the configured LLM. Here we
     replace it with a MagicMock so tests run instantly with no network calls.
 
     Pre-configured return value

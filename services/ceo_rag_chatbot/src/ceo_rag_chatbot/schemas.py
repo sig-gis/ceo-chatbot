@@ -30,3 +30,5 @@ class ChatResponse(BaseModel):
 class HealthResponse(BaseModel):
     """Response body for GET /healthz."""
     status: Literal["ready", "loading"]
+    # Only set when a local model is probed (see rag/local_probe.py).
+    model_state: str | None = None

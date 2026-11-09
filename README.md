@@ -15,8 +15,9 @@ The system has three jobs that run independently:
    numerical embeddings, and saves a searchable index back to GCS. Runs after
    extract, or whenever you want to rebuild the index.
 3. **Chatbot** - a web service that downloads the index from GCS and answers
-   user questions by searching the index and asking Gemini to summarize the
-   matching chunks.
+   user questions by searching the index and asking a language model (LLM) to
+   summarize the matching chunks. The LLM can be a hosted service such as
+   Gemini or DeepSeek, or a model running on your own GPU.
 
 # 🧱 Repository layout
 
@@ -38,7 +39,8 @@ map to three workspace members, plus a small shared library:
   pipeline logic, but pulls `faiss-gpu-cu12` and the CUDA-enabled torch wheel
   instead of their CPU counterparts. Installs a `build-index-gpu` command.
   See [GPU pipeline variant](#gpu-pipeline-variant) below for setup details.
-- `services/ceo_rag_chatbot/` - the **chatbot** service. Loads the RAG db, embeds queries, runs retrieval, and queries Gemini for inference. Installs a `chatbot` command. Pinned to CPU PyTorch so the install stays small.
+- `services/ceo_rag_chatbot/` - the **chatbot** service. Loads the RAG db, embeds queries, runs retrieval, and sends the question and matching chunks to the chosen LLM. Installs a `chatbot` command. Pinned to CPU PyTorch so the install stays small.
+- `services/ceo_inference/` - an optional local LLM server ([Ollama](https://docs.ollama.com/docker)) for running the `local` model on your own GPU. Only a Dockerfile and a start script, not a Python package. See [Local LLM inference server (Ollama)](#local-llm-inference-server-ollama).
 - `demo/chainlit/chainlit-demo/` - a Chainlit browser UI that proxies questions to the chatbot's FastAPI server. Instructions for running it are below.
 
 Why this shape: each service declares only the deps it actually needs, so a
@@ -55,7 +57,7 @@ ceo-chatbot/
 ├── conf/
 │   ├── base/                    # shared config tracked in git
 │   │   ├── prompts.yml          # chatbot prompt templates
-│   │   └── rag_config.yml       # embedding model, chunk size, GCS paths, GitHub repo
+│   │   └── rag_config.yml       # embedding model, LLM choices, GCS paths, GitHub repo
 │   └── local/                   # personal/local configs (gitignored)
 │
 ├── data/                        # working copies of docs and FAISS index (not tracked)
@@ -78,10 +80,13 @@ ceo-chatbot/
 │   │   ├── Dockerfile
 │   │   ├── pyproject.toml
 │   │   └── src/ceo_build_index_gpu/
-│   └── ceo_rag_chatbot/         # chatbot: FastAPI server + RAG pipeline
+│   ├── ceo_rag_chatbot/         # chatbot: FastAPI server + RAG pipeline
+│   │   ├── Dockerfile
+│   │   ├── pyproject.toml
+│   │   └── src/ceo_rag_chatbot/
+│   └── ceo_inference/           # optional local LLM server (Ollama)
 │       ├── Dockerfile
-│       ├── pyproject.toml
-│       └── src/ceo_rag_chatbot/
+│       └── entrypoint.sh
 │
 ├── demo/
 │   └── chainlit/
@@ -113,7 +118,7 @@ ceo-chatbot/
 
 - A computer with Python 3.12 or newer
 - A Google Cloud account with access to the project (ask your team lead)
-- A Gemini API key (free at https://aistudio.google.com/apikey)
+- An API key for the hosted LLM you will use (for example Gemini), or an NVIDIA GPU to run the local model instead (see step 3)
 - A HuggingFace access token (the embedding model is gated - see step 5)
 - About 15 minutes for first-time setup
 
@@ -153,9 +158,20 @@ Then tell gcloud which project to use:
 
 `gcloud config set project YOUR-PROJECT-ID`
 
-### 3. Get a Gemini API key
+### 3. Get an API key for the model you will use
 
-Follow your SOP or go to https://aistudio.google.com/apikey. Save this value. You'll need it for inference over the documents.
+The chatbot sends each question to one LLM, picked in step 8. Hosted models need an API key from their provider. Follow your SOP, or get one from the provider's website. Save the value; it goes in `.env` in step 7.
+
+| Model name in `rag_config.yml` | Provider | Variable in `.env` |
+|---|---|---|
+| `gemini` | Google Gemini (key at https://aistudio.google.com/apikey) | `GEMINI_API_KEY` |
+| `deepseek-flash` | DeepSeek | `DEEPSEEK_API_KEY` |
+| `anthropic` | Anthropic | `ANTHROPIC_API_KEY` |
+| `openai` | OpenAI | `OPENAI_API_KEY` |
+| `kimi` | Moonshot (Kimi) | `MOONSHOT_API_KEY` |
+| `local` | Ollama on your own GPU | none |
+
+You only need the key for the model you will use. The `local` model needs no key, but it needs an NVIDIA GPU (see [Local LLM inference server (Ollama)](#local-llm-inference-server-ollama)).
 
 ### 4. Install `uv`
 
@@ -250,25 +266,49 @@ explaining what it's for. The values you'll need:
 - `GOOGLE_CLOUD_PROJECT` - the project you set in step 2.
 - `DOCS_BUCKET` and `PREFIX` - where the source docs live in GCS.
 - `DB_BUCKET` - where the FAISS index gets uploaded.
-- `GEMINI_API_KEY` - from step 3.
+- The API key for your model, from step 3 (for example `GEMINI_API_KEY`). Leave the others as they are.
 - `HF_TOKEN` - from step 5.
 
 > **Never commit `.env`** and never copy it into Docker images.
 
+### 8. Choose which LLM to use
+
+The chatbot can use any model listed under `llm.models` in `conf/base/rag_config.yml`. The `active_model` setting picks which one. The repo default is `local`. For example, to use Gemini instead:
+
+```yaml
+llm:
+  active_model: gemini
+```
+
+Each entry under `llm.models` sets where the model lives (`base_url`), its name at the provider (`model`), and which `.env` variable holds its key (`api_key_env`). Other optional settings include `temperature`, `timeout` (seconds), `fallback` (backup model names to try if the main one fails), `probe`, and `json_mode`.
+
+`probe: true` (set on `local`) makes the chatbot check the local server every 5 seconds and refuse questions until the model is loaded. See [Local LLM inference server (Ollama)](#local-llm-inference-server-ollama).
+
+`json_mode: true` tells the chatbot the provider supports JSON output mode, which makes the question-interpretation step faster and more reliable. Only set it if the provider's docs say it supports `response_format` `json_object`; some providers (for example Anthropic) reject it.
+
+Why this matters: each model needs its own API key. The `api_key_env` field of the chosen model names the variable in `.env` that must hold the key. Models without `api_key_env` (like `local`) need no key.
+
+If the key is missing, the chatbot stops at startup with an error like:
+
+```
+ValueError: DEEPSEEK_API_KEY is not set, but model 'deepseek-flash' needs it
+```
+
 ## Running on your laptop
 
-The two pipeline jobs are exposed as commands by the workspace:
+Each service is exposed as a command by the workspace:
 
 | Command | What it does | Implemented in |
 |---|---|---|
 | `uv run ingest-docs` | Clones the CEO docs repo and syncs it to GCS | `services/ceo_ingest_docs` |
 | `uv run build-index` | Builds the FAISS index from docs in GCS | `services/ceo_build_index` |
+| `uv run --env-file .env chatbot` | Starts the chatbot API at http://localhost:8080 | `services/ceo_rag_chatbot` |
 
-Run them in order - extract first, build-index second.
+Run them in order - extract first, build-index second, then the chatbot.
 
-> **Chat UI:** once you have the chatbot FastAPI container running (see
-> [Run the chatbot container](#run-the-chatbot-container) below), you can
-> also launch the Chainlit UI to talk to it from a browser.
+> **Chat UI:** once the chatbot is running (on your laptop or in Docker), you
+> can also launch the [Chainlit UI](#running-the-chainlit-ui) to talk to it
+> from a browser.
 
 ### 1. Sync the source docs with GCS
 
@@ -394,7 +434,7 @@ uv run build-index --device cpu
 > [pytorch.org/get-started/locally](https://pytorch.org/get-started/locally/).)
 >
 > For the chatbot service which only needs to run inference on the embedded
-> query and offloads generation to Gemini, CPU is the right default. For
+> query and offloads generation to the LLM, CPU is the right default. For
 > indexing the ~300 RST docs, CPU runs in 10–30 minutes, GPU in under 5.
 
 #### What to expect
@@ -424,6 +464,65 @@ With `--local` (skips the GCS download, uses docs already on disk):
 The last line printed is the GCS path of the uploaded index. The index is
 also kept on disk at `data/vectorstores/ceo_docs_faiss/` (not tracked by
 git).
+
+### 3. Run the chatbot
+
+This starts the chatbot API directly on your laptop, without Docker. It is
+the quickest way to try a change to the chatbot code.
+
+Before you start, check that `.env` has these values (see
+[Configure your environment](#7-configure-your-environment)):
+
+- `GOOGLE_APPLICATION_CREDENTIALS` - the full path to your ADC file, for
+  example `/home/yourname/.config/gcloud/application_default_credentials.json`.
+- `GOOGLE_CLOUD_PROJECT` and `DB_BUCKET` - the chatbot downloads the index from
+  this bucket.
+- `HF_TOKEN` - for the embedding model.
+- The API key for your `active_model` (not needed for `local`).
+
+From the project root:
+
+```bash
+uv run --env-file .env chatbot
+```
+
+`--env-file .env` loads `.env` into the environment. This matters because the
+Hugging Face library and the LLM key lookup read their values from the
+environment, not from the file.
+
+On startup the chatbot downloads the index from GCS into
+`data/vectorstores/ceo_docs_faiss/` (replacing any local copy) and loads the
+embedding model. When it is ready you should see:
+
+```
+INFO:ceo_rag_chatbot.lifespan:chatbot ready in 6.1s
+INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
+```
+
+Then follow [Check it is running](#check-it-is-running) and
+[Sample query](#sample-query) below; they work the same way. Stop the chatbot
+with Ctrl+C.
+
+**Using the `local` model.** Start only the local LLM server in Docker (it
+needs an NVIDIA GPU; see
+[Local LLM inference server (Ollama)](#local-llm-inference-server-ollama)):
+
+```bash
+docker compose up -d inference
+```
+
+Naming the `inference` service starts it even though its `local-llm` profile
+is not turned on. Then, in `conf/base/rag_config.yml`, set the `local` model's
+address to your laptop instead of the Compose service name:
+
+```yaml
+    local:
+      base_url: http://localhost:11434/v1
+```
+
+Change it back to `http://inference:11434/v1` before running the chatbot with
+Docker Compose. Stop the server when you are done with
+`docker compose stop inference`.
 
 ## Running with Docker
 
@@ -637,7 +736,7 @@ The chatbot service (`ceo-rag-chatbot`) downloads the FAISS index from GCS on st
 docker build -f services/ceo_rag_chatbot/Dockerfile -t ceo-rag-chatbot:latest .
 ```
 
-The first build takes several minutes - it installs the same heavyweight machine-learning stack as the pipeline image (PyTorch CPU, sentence-transformers, transformers, faiss-cpu, langchain-*) plus FastAPI/uvicorn and google-genai. The pyproject pins torch to the CPU wheel index, so this image never pulls CUDA wheels. Subsequent builds reuse cached layers - only the changed layers rebuild.
+The first build takes several minutes - it installs the same heavyweight machine-learning stack as the pipeline image (PyTorch CPU, sentence-transformers, transformers, faiss-cpu, langchain-*) plus FastAPI/uvicorn and the OpenAI Python library, which the chatbot uses to talk to every LLM provider. The pyproject pins torch to the CPU wheel index, so this image never pulls CUDA wheels. Subsequent builds reuse cached layers - only the changed layers rebuild.
 
 When it finishes you should see something like:
 
@@ -659,11 +758,12 @@ docker image ls ceo-rag-chatbot:latest
 The container reads its configuration from your `.env` file - the same one you use for local development. Make sure it contains these keys:
 
 ```
-GEMINI_API_KEY=...
 GOOGLE_CLOUD_PROJECT=...
 DB_BUCKET=...
 HF_TOKEN=...
 ```
+
+plus the API key for your `active_model` (for example `GEMINI_API_KEY=...`; see "Choose which LLM to use"). The `local` model needs no key, but this `docker run` command cannot reach the local LLM server. To use `local` in Docker, use [Docker Compose](#running-with-docker-compose).
 
 It also needs your Google Cloud credentials so it can download the FAISS index from GCS. An earlier step - `gcloud auth application-default login` - creates an ADC file at `~/.config/gcloud/application_default_credentials.json`. Bind-mount this file to `/gcp/adc.json` and point the container at it with `GOOGLE_APPLICATION_CREDENTIALS`.
 
@@ -701,16 +801,16 @@ INFO:ceo_rag_chatbot.lifespan:chatbot ready in 6.1s
 INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
 ```
 
-> **Note on Cloud Deployment:** when deploying to the cloud you do not use `docker run`. Environment variables are set in the service configuration, and secrets (`GEMINI_API_KEY`, `HF_TOKEN`) should be stored in GCP Secret Manager/following your SOP and referenced from there rather than passed as plain env vars.
+> **Note on Cloud Deployment:** when deploying to the cloud you do not use `docker run`. Environment variables are set in the service configuration, and secrets (your LLM API key, `HF_TOKEN`) should be stored in GCP Secret Manager/following your SOP and referenced from there rather than passed as plain env vars.
 
 #### Faster local iteration: bind-mounted caches
 
 By default each container is stateless - every run re-downloads the FAISS index from GCS and the embedding model from HuggingFace. For repeated local runs you can bind-mount the host paths the container would otherwise rebuild:
 
-- `$PWD/data:/app/data` - the chatbot writes the FAISS index to `data/vectorstores/ceo_docs_faiss/` inside the container. Reusing the host's `data/` skips the GCS download on subsequent starts.
+- `$PWD/data:/app/data` - the chatbot writes the FAISS index to `data/vectorstores/ceo_docs_faiss/` inside the container. Mounting the host's `data/` puts that copy on your laptop. The chatbot still downloads the index from GCS on every start and replaces the local copy, so this does not skip the download.
 - `$HOME/.cache/huggingface:/root/.cache/huggingface` - the embedding model is cached here. Reusing the host's HuggingFace cache skips the ~600 MB - 1.2 GB model download. If you have already run `uv run build-index` on your host, the model is already there.
 
-**Reuse a local FAISS index only (skip the GCS index download):**
+**Mount the local `data/` folder only (the index is still downloaded from GCS):**
 
 ```bash
 docker run --rm \
@@ -763,6 +863,17 @@ You should see:
 
 If you see `{"status": "loading"}` with HTTP 503, the index is still
 downloading - wait a moment and try again.
+
+With the `local` model, the response also shows the model's state:
+
+```json
+{"status":"ready","model_state":"loaded"}
+```
+
+Until the state is `loaded`, `/chat` answers with HTTP 503 and a message like
+`The local model is not ready yet (state: downloaded). Try again shortly.`
+The states, from least to most ready, are `unreachable`, `server_up`,
+`downloaded` and `loaded`.
 
 You can also visit http://localhost:8080/docs to see the current API and
 schemas.
@@ -823,18 +934,126 @@ up, the UI retries every 15 seconds for up to 3 minutes before giving up.
 > **Adjusting the timeout:** the per-request timeout (how long the UI waits
 > for each `/chat` response) is the `TIMEOUT` constant at the top of
 > `demo/chainlit/chainlit-demo/src/chainlit_demo/demo.py`. The default is
-> 15 seconds. Raise it if the chatbot is slow to respond on your machine.
+> 120 seconds, to leave room for slower local models. Raise it if the chatbot
+> is slow to respond on your machine. If the chatbot returns an error (for
+> example the local model is not loaded yet), the UI shows the chatbot's message.
+
+### Local LLM inference server (Ollama)
+
+The `local` model in `conf/base/rag_config.yml` runs on your own GPU through [Ollama](https://docs.ollama.com/docker), in its own container (`ceo-inference`). This keeps your questions on your machine and needs no API key. The default model, `llama3.1:8b-instruct-q4_K_M`, fits on a GPU with 8 GB of memory.
+
+**Prerequisite:** an NVIDIA GPU and the NVIDIA Container Toolkit, which lets Docker use the GPU. Follow the install steps in the Ollama Docker docs linked above. On Linux, use the native Docker Engine: Docker Desktop only passes the GPU to containers on Windows (with WSL 2). To check it works:
+
+```bash
+docker run --rm --gpus all ubuntu nvidia-smi
+```
+
+You should see a table listing your GPU.
+
+The easiest way to run it together with the chatbot is [Docker Compose](#running-with-docker-compose). The steps below run the server on its own, for example to use it with a chatbot started on your laptop.
+
+**Where the chatbot looks for the server.** `models.local.base_url` in `conf/base/rag_config.yml` must match how the chatbot runs:
+
+- Chatbot in Docker Compose (the repo default): `http://inference:11434/v1`. Inside Compose, services reach each other by service name.
+- Chatbot on your laptop (outside Docker, see [Run the chatbot](#3-run-the-chatbot)): `http://localhost:11434/v1`.
+
+**Build the image** from the project root:
+
+```bash
+docker build -f services/ceo_inference/Dockerfile -t ceo-inference:latest .
+```
+
+**Run it:**
+
+```bash
+docker run --rm --gpus all \
+  -p 11434:11434 \
+  -v "$HOME/.ollama:/root/.ollama" \
+  -e OLLAMA_MODEL=llama3.1:8b-instruct-q4_K_M \
+  ceo-inference:latest
+```
+
+- `-v "$HOME/.ollama:/root/.ollama"` stores downloaded models in `~/.ollama` on your machine, so the model is only downloaded once.
+- `OLLAMA_MODEL` must match `models.local.model` in `rag_config.yml`. If you change the model, change both.
+
+On the first run the model (about 5 GB) is downloaded. You should see:
+
+```
+Model llama3.1:8b-instruct-q4_K_M not in cache, downloading from the Ollama registry
+...
+Model llama3.1:8b-instruct-q4_K_M loaded into memory
+```
+
+On later runs the download is skipped:
+
+```
+Model llama3.1:8b-instruct-q4_K_M found in cache, skipping download
+```
+
+**Check the model is loaded**, from another terminal:
+
+```bash
+curl http://localhost:11434/api/ps
+```
+
+You should see JSON that lists `llama3.1:8b-instruct-q4_K_M` under `models`. The model stays loaded until the container stops. Press Ctrl+C (or run `docker stop`) to stop it.
+
+**Port already in use?** If the server fails to start because port 11434 is taken, check what holds it:
+
+```bash
+sudo ss -ltnp | grep ':11434'
+```
+
+No output means the port is free. Otherwise the last column names the program. A host install of Ollama often holds this port; stop it with `sudo systemctl stop ollama` (and start it again later with `sudo systemctl start ollama`). The same check works for the chatbot's port 8080.
 
 ### Running with Docker Compose
 
-`docker-compose.yml` at the repo root wires all three services together so you do not
+`docker-compose.yml` at the repo root wires all the services together so you do not
 have to manage `docker run` flags by hand.
 
-**Start the chatbot** (the only long-running service; builds the image if needed):
+**Start the chatbot** (builds the image if needed):
 
 ```bash
 docker compose up
 ```
+
+**Start the chatbot with the local LLM** (needs an NVIDIA GPU; see [Local LLM inference server (Ollama)](#local-llm-inference-server-ollama) for prerequisites):
+
+```bash
+docker compose --profile local-llm up
+```
+
+This also starts the `inference` service (the Ollama server). Use it when `active_model` in `conf/base/rag_config.yml` is `local`, the repo default. The first start downloads the model (about 5 GB) into `~/.ollama`. You should see `Model ... loaded into memory` from `inference-1`, then `local model ... state: loaded` from `chatbot-1`. Until then, the chatbot answers questions with a "not ready yet" message. The model name is set by `OLLAMA_MODEL` in `docker-compose.yml` and must match `models.local.model` in `rag_config.yml`.
+
+With a hosted model (for example `active_model: gemini`), plain `docker compose up` is enough and no GPU is needed.
+
+**What happens if the local model stops.** The chatbot checks the inference server every 5 seconds. To see this, stop the server in another terminal:
+
+```bash
+docker compose stop inference
+```
+
+After about 5 seconds, questions get this answer (HTTP 503), and the Chainlit UI shows the same message:
+
+```json
+{"detail":"The local model is not ready yet (state: unreachable). Try again shortly."}
+```
+
+Start the server again:
+
+```bash
+docker compose --profile local-llm start inference
+```
+
+The chatbot logs the state changing back to `loaded`, and questions work again without restarting the chatbot.
+
+**Switch models without rebuilding.** `conf/` is mounted into the chatbot container, so edit `active_model` in `conf/base/rag_config.yml` and restart only the chatbot:
+
+```bash
+docker compose restart chatbot
+```
+
+Why this matters: the chatbot reads the config once at startup, so a restart is needed, but no image rebuild. The chatbot logs `chatbot ready in ...s` again. With a hosted model, `curl http://localhost:8080/healthz` shows `{"status":"ready"}` with no `model_state`, because only the local model is checked. If you switch to `local`, start the inference server first with `docker compose --profile local-llm up -d inference`. To free the GPU after switching away from `local`, run `docker compose stop inference`.
 
 **Run the CPU data pipeline** (ingest docs, then build the FAISS index):
 
@@ -852,6 +1071,14 @@ pipeline job finishes and forwards its exit code, which is useful in CI.
 docker compose --profile jobs-gpu up --exit-code-from pipeline-gpu
 ```
 
+To rebuild only the index on the GPU, without running ingest again:
+
+```bash
+docker compose --profile jobs-gpu run --rm --no-deps pipeline-gpu
+```
+
+`--no-deps` skips the ingest job and `--rm` removes the container when it finishes. You should see `Using device: cuda` near the start, and the last line is the GCS path of the uploaded index.
+
 **Run a single job** without the other:
 
 ```bash
@@ -865,6 +1092,14 @@ docker compose --profile jobs run --rm pipeline
 docker compose build
 docker compose up --build
 ```
+
+**Stop and remove everything:**
+
+```bash
+docker compose --profile local-llm down
+```
+
+Each container and the network are listed as `Removed`. Include `--profile local-llm` so the `inference` container is removed too; a plain `docker compose down` only removes services without a profile. Downloaded models stay in `~/.ollama` for next time.
 
 > **Note on credentials:** `GOOGLE_APPLICATION_CREDENTIALS` in `.env` must be an
 > absolute path. Docker Compose does not expand tilde (`~/...`). Use the full path,
@@ -932,4 +1167,8 @@ exercise the full pipeline against real data.
 | **API schemas** (`chatbot/`) | `ChatMessage` role allowlist, `ChatRequest` history default, `ChatResponse` fields, and `HealthResponse` status allowlist. |
 | **FAISS retriever** (`chatbot/`) | `get_retriever()` forwards `query` and `k` correctly to `similarity_search`, and defaults `k` to 5. |
 | **Interpretation model** (`chatbot/`) | Cross-field rules: `search_query` is required when `needs_retrieval=True` and must be `None` otherwise; `context_used` pattern; confidence score bounds. |
-| **FastAPI routes** (`app/`) | `/healthz` returns 200/503 based on startup state; `/chat` readiness gate, happy path, history forwarding, empty sources, missing URL fallback, and schema validation (422 responses). |
+| **FastAPI routes** (`app/`) | `/healthz` returns 200/503 based on startup state and reports `model_state` for the local model; `/chat` readiness gate (including 503 until the local model is loaded), happy path, history forwarding, empty sources, missing URL fallback, and schema validation (422 responses). |
+| **LLM config** (`chatbot/`) | `active_model` must name a configured model; fallback models reuse the main entry's `base_url` and key; a missing API key error names the variable; the keyless `local` model needs no key; the repo's `rag_config.yml` loads. |
+| **OpenAI-compatible provider** (`chatbot/`) | Returns the answer, falls back to the next model on failure, raises the last error when all fail, streams chunks in order, sends JSON mode only when `json_mode` is set, and sends a string prompt as one user message or a message list as given. |
+| **Local model probe** (`chatbot/`) | Reports `unreachable`, `server_up`, `downloaded` or `loaded` from the Ollama server's answers, and matches the model name exactly. |
+| **Chat messages** (`chatbot/`) | Prompts keep system, user and assistant turns as separate messages, and token counting adds up each message's text. |

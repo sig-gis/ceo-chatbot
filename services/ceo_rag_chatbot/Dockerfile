@@ -6,8 +6,10 @@
 #   docker build -f services/ceo_rag_chatbot/Dockerfile -t ceo-rag-chatbot:latest .
 #
 # Required env at runtime:
-#   GEMINI_API_KEY, GOOGLE_CLOUD_PROJECT, DB_BUCKET
+#   GOOGLE_CLOUD_PROJECT, DB_BUCKET
 #   HF_TOKEN  (read directly by huggingface_hub for the gated embedding model)
+#   The API key named by the active model's api_key_env in conf/base/rag_config.yml
+#   (for example GEMINI_API_KEY). The keyless local model needs none.
 # Optional:
 #   PORT       (Cloud Run injects this; the `chatbot` script defaults to 8080)
 #   LOG_LEVEL  (default INFO)

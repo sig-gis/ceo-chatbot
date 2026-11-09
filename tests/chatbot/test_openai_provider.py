@@ -1,0 +1,101 @@
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from ceo_rag_chatbot.rag.llm import OpenAIProvider
+
+
+def _completion(text):
+    """Build a fake non-streaming chat completion response."""
+    return MagicMock(choices=[MagicMock(message=MagicMock(content=text))])
+
+
+def _chunk(text):
+    """Build a fake streaming chunk."""
+    return MagicMock(choices=[MagicMock(delta=MagicMock(content=text))])
+
+
+@pytest.fixture
+def client():
+    # Patch the OpenAI class so no network client is created.
+    with patch("ceo_rag_chatbot.rag.llm.OpenAI") as openai_cls:
+        yield openai_cls.return_value
+
+
+def _provider(models=("primary", "backup")):
+    return OpenAIProvider(
+        base_url="http://example/v1", api_key="k", models=list(models),
+        context_window=1000, max_output_tokens=100,
+    )
+
+
+def test_generate_returns_message_content(client):
+    client.chat.completions.create.return_value = _completion("hello")
+    assert _provider().generate("hi") == "hello"
+
+
+def test_generate_falls_back_to_next_model(client):
+    client.chat.completions.create.side_effect = [RuntimeError("down"), _completion("ok")]
+    assert _provider().generate("hi") == "ok"
+    assert client.chat.completions.create.call_args.kwargs["model"] == "backup"
+
+
+def test_generate_raises_last_error_when_all_models_fail(client):
+    client.chat.completions.create.side_effect = [RuntimeError("a"), RuntimeError("b")]
+    with pytest.raises(RuntimeError, match="b"):
+        _provider().generate("hi")
+
+
+def test_stream_yields_chunks_in_order(client):
+    client.chat.completions.create.return_value = iter([_chunk("a"), _chunk("b"), _chunk(None)])
+    assert list(_provider().stream("hi")) == ["a", "b"]
+
+
+def test_json_output_sends_json_mode_when_model_supports_it(client):
+    client.chat.completions.create.return_value = _completion("{}")
+    provider = OpenAIProvider(base_url="http://example/v1", api_key="k", models=["m"],
+                              context_window=1000, json_mode=True)
+    provider.generate("hi", json_output=True)
+    assert client.chat.completions.create.call_args.kwargs["response_format"] == {"type": "json_object"}
+
+
+def test_json_output_ignored_when_model_does_not_support_it(client):
+    client.chat.completions.create.return_value = _completion("{}")
+    _provider().generate("hi", json_output=True)
+    assert "response_format" not in client.chat.completions.create.call_args.kwargs
+
+
+def test_string_prompt_is_sent_as_one_user_message(client):
+    client.chat.completions.create.return_value = _completion("ok")
+    _provider().generate("hi")
+    assert client.chat.completions.create.call_args.kwargs["messages"] == [
+        {"role": "user", "content": "hi"}
+    ]
+
+
+def test_message_list_is_sent_as_given(client):
+    client.chat.completions.create.return_value = _completion("ok")
+    messages = [
+        {"role": "system", "content": "rules"},
+        {"role": "user", "content": "q1"},
+        {"role": "assistant", "content": "a1"},
+        {"role": "user", "content": "q2"},
+    ]
+    _provider().generate(messages)
+    assert client.chat.completions.create.call_args.kwargs["messages"] == messages
+
+
+def test_temperature_omitted_when_configured_null(client):
+    client.chat.completions.create.return_value = _completion("ok")
+    provider = OpenAIProvider(base_url="http://example/v1", api_key="k", models=["m"],
+                              context_window=1000, temperature=None)
+    provider.generate("hi", temperature=0.1)
+    assert "temperature" not in client.chat.completions.create.call_args.kwargs
+
+
+def test_temperature_override_is_sent_when_configured(client):
+    client.chat.completions.create.return_value = _completion("ok")
+    provider = OpenAIProvider(base_url="http://example/v1", api_key="k", models=["m"],
+                              context_window=1000, temperature=0.2)
+    provider.generate("hi", temperature=0.1)
+    assert client.chat.completions.create.call_args.kwargs["temperature"] == 0.1

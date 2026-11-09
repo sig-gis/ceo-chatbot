@@ -5,245 +5,280 @@
     LLM provider abstraction for local and API-based models.
 
  details:
-    This module provides a unified interface for different LLM backends,
-    supporting Hugging Face local models and Google Gemini API.
+    This module provides a unified interface for LLM backends. All models,
+    local (Ollama) or hosted (Gemini, DeepSeek, ...), are reached through
+    their OpenAI-compatible chat API.
     It handles initialization, text generation, and streaming.
 """
 
 import logging
-from typing import Iterable, Optional, Tuple, List
-import torch
-from transformers import (
-    AutoTokenizer,
-    AutoModelForCausalLM,
-    BitsAndBytesConfig,
-    pipeline,
-    PreTrainedTokenizerBase,
-)
-import google.genai as genai
+import os
+from abc import ABC, abstractmethod
+from typing import Dict, Iterable, List, Optional, Union
+from openai import OpenAI
 
-from ceo_rag_chatbot.config import get_settings, ChatbotConfig
+from ceo_rag_chatbot.config import ChatbotConfig
+
+# A prompt is either one string (sent as a single user message) or a list of
+# chat messages like {"role": "system" | "user" | "assistant", "content": "..."}.
+Prompt = Union[str, List[Dict[str, str]]]
 
 
 
-class LLMProvider:
-    """Base class for LLM providers."""
-    def generate(self, prompt: str, **kwargs) -> str:
-        raise NotImplementedError
-
-    def stream(self, prompt: str, **kwargs) -> Iterable[str]:
-        raise NotImplementedError
-
-    def count_tokens(self, text: str) -> int:
-        raise NotImplementedError
-
-    @property
-    def max_context_tokens(self) -> int:
-        raise NotImplementedError
-
-
-class HuggingFaceProvider(LLMProvider):
-    """Provider for Hugging Face local models."""
-    def __init__(self, model_name: str, max_output_tokens: int):
-        bnb_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_use_double_quant=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.bfloat16,
-        )
-
-        self.model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            quantization_config=bnb_config,
-            device_map="auto"
-        )
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.pipeline = pipeline(
-            task="text-generation",
-            model=self.model,
-            tokenizer=self.tokenizer,
-            do_sample=True,
-            temperature=0.2,
-            repetition_penalty=1.1,
-            return_full_text=False,
-            max_new_tokens=max_output_tokens, # Use configured value
-        )
-        self.max_output_tokens = max_output_tokens
-        
-        # Try to get max position embeddings
-        if hasattr(self.model.config, "max_position_embeddings"):
-            self._max_context = self.model.config.max_position_embeddings
-        else:
-            self._max_context = 4096 # Fallback
-
-    def generate(self, prompt: str, **kwargs) -> str:
-        # Allow kwargs to override default max_output_tokens
-        max_tokens_to_generate = kwargs.pop("max_output_tokens", self.max_output_tokens)
-        outputs = self.pipeline(prompt, max_new_tokens=max_tokens_to_generate, **kwargs)
-        return outputs[0]["generated_text"]
-
-    def stream(self, prompt: str, **kwargs) -> Iterable[str]:
-        from threading import Thread
-        from transformers import TextIteratorStreamer
-
-        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
-        streamer = TextIteratorStreamer(
-            self.tokenizer,
-            skip_prompt=True,
-            skip_special_tokens=True,
-        )
-        # Allow kwargs to override default max_output_tokens
-        max_tokens_to_generate = kwargs.pop("max_output_tokens", self.max_output_tokens)
-        generation_kwargs = dict(
-            **inputs,
-            streamer=streamer,
-            max_new_tokens=max_tokens_to_generate,
-            do_sample=True,
-            temperature=kwargs.get("temperature", 0.2),
-            repetition_penalty=1.1,
-        )
-
-        thread = Thread(target=self.model.generate, kwargs=generation_kwargs)
-        thread.start()
-
-        for text in streamer:
-            yield text
-
-    def count_tokens(self, text: str) -> int:
-        return len(self.tokenizer.encode(text))
-
-    @property
-    def max_context_tokens(self) -> int:
-        return self._max_context
-
-
-class GeminiProvider(LLMProvider):
-    """Provider for Google Gemini API using the new google-genai SDK."""
-    def __init__(self, model_choices:List[str]=None, max_output_tokens: int = 8192):
-        # Instantiate genai client with API key
-        settings = get_settings()
-        api_key = settings.gemini_api_key
-        
-        if not api_key:
-            raise ValueError("GEMINI_API_KEY not found in environment or .env file")
-        
-        self.client = genai.Client(api_key=api_key)
-        
-        if not model_choices:
-            self.model_choices = ["gemini-2.5-flash","gemini-2.0-flash"]
-        else:
-            self.model_choices = model_choices
-        
-        self._validate_model_choices()
-
-        # Gemini have huge context, but we'll set a reasonable limit for RAG
-        self._max_context = 1000000
-        self.max_output_tokens = max_output_tokens
-
-    def _validate_model_choices(self) -> None:
-        """Check each configured model exists with one API call per model.
-
-        Logs a warning for any model that cannot be found. Does not raise —
-        generate() skips unavailable models via its fallback chain.
+class LLMProvider(ABC):
+    """Base class for LLM providers. Every provider must implement all four members."""
+    @abstractmethod
+    def generate(self, prompt: Prompt, **kwargs) -> str:
         """
-        for model in self.model_choices:
-            try:
-                self.client.models.get(model=f"models/{model}")
-            except Exception as e:
-                logging.warning(f"Model {model} not found or not accessible: {e}")
-    
-    def generate(self, prompt: str, **kwargs) -> str:
-        # Allow kwargs to override default max_output_tokens
-        max_tokens_to_generate = kwargs.pop("max_output_tokens", self.max_output_tokens)
-        config = {
-            "temperature": kwargs.get("temperature", 0.2),
-            "max_output_tokens": max_tokens_to_generate,
-            "response_mime_type": kwargs.get("response_mime_type",None) # allow caller of generate to set this (i.e. interpreter caller)
-        }
-        
-        models = self.model_choices
+        Send a prompt to the model and return the full answer.
+
+        Args:
+            prompt (Prompt): One prompt string, or a list of chat messages sent as given.
+            **kwargs: Optional per-call overrides, such as max_output_tokens or temperature.
+
+        Returns:
+            str: The model's answer.
+        """
+        pass
+
+    @abstractmethod
+    def stream(self, prompt: Prompt, **kwargs) -> Iterable[str]:
+        """
+        Send a prompt to the model and return the answer in pieces.
+
+        Args:
+            prompt (Prompt): One prompt string, or a list of chat messages sent as given.
+            **kwargs: Optional per-call overrides, such as max_output_tokens or temperature.
+
+        Returns:
+            Iterable[str]: Text pieces that join together into the full answer.
+        """
+        pass
+
+    @abstractmethod
+    def count_tokens(self, text: str) -> int:
+        """
+        Count (or estimate) how many tokens the model would see in a text.
+
+        Used to trim conversation history so the prompt fits the model's context window.
+
+        Args:
+            text (str): The text to measure.
+
+        Returns:
+            int: Number of tokens.
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def max_context_tokens(self) -> int:
+        """
+        The largest number of tokens the model accepts in one request (prompt plus answer).
+
+        Returns:
+            int: The model's context window size.
+        """
+        pass
+
+
+class OpenAIProvider(LLMProvider):
+    """Provider for any server that speaks the OpenAI chat API (Gemini, Ollama, DeepSeek, ...).
+
+    `models` is the primary model followed by fallbacks. Each call tries them
+    in order and re-raises the last error if all of them fail.
+    """
+    def __init__(self, base_url: str, api_key: str, models: List[str], context_window: int,
+                 max_output_tokens: int = 8192, temperature: Optional[float] = 0.2, timeout: float = 60,
+                 json_mode: bool = False):
+        """
+        Create an OpenAI SDK client pointed at the given server.
+
+        No network call is made here; the first request happens on generate() or stream().
+
+        Args:
+            base_url (str): The server's OpenAI-compatible address, e.g. http://inference:11434/v1.
+            api_key (str): API key for the server. Keyless servers (Ollama) accept any value.
+            models (List[str]): Model names to try, primary first, then fallbacks.
+            context_window (int): Largest prompt plus answer size the model accepts, in tokens.
+            max_output_tokens (int): Default cap on answer length, in tokens.
+            temperature (Optional[float]): Default randomness of answers. None omits
+                the temperature parameter, for providers (e.g. Anthropic) that reject it.
+            timeout (float): Seconds to wait for a response before giving up.
+            json_mode (bool): True if the server supports response_format json_object.
+                Only then is a json_output=True request sent in JSON mode.
+        """
+        self.client = OpenAI(base_url=base_url, api_key=api_key, timeout=timeout)
+        self.models = models
+        self._max_context = context_window
+        self.max_output_tokens = max_output_tokens
+        self.temperature = temperature
+        self.json_mode = json_mode
+
+    def _inference_with_fallback(self, prompt: Prompt, stream: bool, **kwargs):
+        """
+        Send the prompt to each model in turn until one succeeds.
+
+        details:
+            A string prompt is sent as a single user message; a message list is
+            sent as given, so the server applies the model's own chat format.
+            For streaming, the whole
+            answer is collected before returning, so a model that fails halfway
+            falls back cleanly instead of returning a partial answer.
+            json_output=True asks for JSON mode, which makes the model return
+            valid JSON only. It is sent only if this model supports it
+            (json_mode); otherwise the request goes out as plain text.
+            Unknown kwargs are ignored on purpose.
+
+        Args:
+            prompt (Prompt): One prompt string, or a list of chat messages sent as given.
+            stream (bool): True to use the streaming API, False for a single response.
+            **kwargs: Optional overrides: max_output_tokens, temperature, json_output.
+
+        Returns:
+            str | List[str]: The full answer when stream is False, or the list of
+            answer pieces when stream is True.
+
+        Raises:
+            Exception: The last model's error, if every model fails.
+        """
+        if isinstance(prompt, str):
+            messages = [{"role": "user", "content": prompt}]
+        else:
+            messages = prompt
+
+        extra = {}
+        if kwargs.get("json_output") and self.json_mode:
+            # Only add response_format when supported: some servers (e.g. Anthropic)
+            # reject json_object with a 400 error.
+            extra["response_format"] = {"type": "json_object"}
+
+        # temperature is only sent when the model config sets one. When the
+        # config sets temperature: null (e.g. Anthropic, whose models reject
+        # any temperature below 1), never send it
+        if self.temperature is not None:
+            extra["temperature"] = kwargs.get("temperature", self.temperature)
+
         last_exception = None
-        
-        for model in models:
+        for model in self.models:
             try:
-                response = self.client.models.generate_content(
+                response = self.client.chat.completions.create(
                     model=model,
-                    contents=prompt,
-                    config=config
+                    messages=messages,
+                    max_tokens=kwargs.get("max_output_tokens", self.max_output_tokens),
+                    stream=stream,
+                    **extra,
                 )
-                return response.text
-                
+                if not stream:
+                    return response.choices[0].message.content
+                # Return the text pieces of the streamed response, skipping empty chunks
+                return [c.choices[0].delta.content for c in response
+                        if c.choices and c.choices[0].delta.content]
             except Exception as e:
-                logging.warning(f"Warning: Gemini model {model} failed during generation: {e}")
+                logging.warning(f"Model {model} failed: {e}")
                 last_exception = e
-                continue # Try next model
-        
-        # If we get here, all models failed
         raise last_exception
 
-    def stream(self, prompt: str, **kwargs) -> Iterable[str]:
-        # Allow kwargs to override default max_output_tokens
-        max_tokens_to_generate = kwargs.pop("max_output_tokens", self.max_output_tokens)
-        config = {
-            "temperature": kwargs.get("temperature", 0.2),
-            "max_output_tokens": max_tokens_to_generate,
-        }
+    def generate(self, prompt: Prompt, **kwargs) -> str:
+        """
+        Send a prompt and return the full answer, trying fallback models on failure.
 
-        models = self.model_choices
-        last_exception = None
-        
-        for model in models:
-            try:
-                response = self.client.models.generate_content_stream(
-                    model=model,
-                    contents=prompt,
-                    config=config
-                )
-                # Buffer the entire response first to ensure atomicity
-                chunks = []
-                for chunk in response:
-                    chunks.append(chunk.text)
-                
-                # Only yield if fully buffered successfully
-                for text in chunks:
-                    yield text
-                return # Success
-                
-            except Exception as e:
-                logging.warning(f"Warning: Gemini model {model} failed during streaming: {e}")
-                last_exception = e
-                continue # Try next model
-            
-        # If we get here, all models failed
-        raise last_exception
+        Args:
+            prompt (Prompt): One prompt string, or a list of chat messages sent as given.
+            **kwargs: Optional overrides: max_output_tokens, temperature, json_output.
+
+        Returns:
+            str: The model's answer.
+
+        Raises:
+            Exception: The last model's error, if every model fails.
+        """
+        return self._inference_with_fallback(prompt, stream=False, **kwargs)
+
+    def stream(self, prompt: Prompt, **kwargs) -> Iterable[str]:
+        """
+        Send a prompt and yield the answer in pieces, trying fallback models on failure.
+
+        The whole answer is received before the first piece is yielded (see
+        _inference_with_fallback), so callers never get a partial answer.
+
+        Args:
+            prompt (Prompt): One prompt string, or a list of chat messages sent as given.
+            **kwargs: Optional overrides: max_output_tokens, temperature, json_output.
+
+        Yields:
+            str: Pieces of the answer, in order.
+
+        Raises:
+            Exception: The last model's error, if every model fails.
+        """
+        yield from self._inference_with_fallback(prompt, stream=True, **kwargs)
 
     def count_tokens(self, text: str) -> int:
-        response = self.client.models.count_tokens(
-            model=self.model_choices[0],
-            contents=text
-        )
-        return response.total_tokens
+        """
+        Estimate the number of tokens in a text.
+
+        There is no tokenizer for models behind an API, so this uses the common
+        rule of thumb of about 4 characters per token. Keep some headroom in
+        context_window because the estimate can be off.
+
+        Args:
+            text (str): The text to measure.
+
+        Returns:
+            int: Estimated number of tokens.
+        """
+        return len(text) // 4
 
     @property
     def max_context_tokens(self) -> int:
+        """
+        The model's context window, as set in rag_config.yml.
+
+        Returns:
+            int: Largest prompt plus answer size the model accepts, in tokens.
+        """
         return self._max_context
 
 
-def get_reader_llm(
-    config: ChatbotConfig
-) -> Tuple[LLMProvider, Optional[PreTrainedTokenizerBase]]:
+def get_reader_llm(config: ChatbotConfig) -> LLMProvider:
     """
-    Factory function to get the appropriate LLM provider.
+    Build an OpenAIProvider for the active model in rag_config.yml.
+
+    details:
+        The API key is read from the env var named by `api_key_env`. Entries
+        without `api_key_env` (e.g. Ollama) get a placeholder key, because the
+        OpenAI client requires a value even when the server ignores it.
+        The entry's fallback models are tried after its main model.
+
+    Args:
+        config (ChatbotConfig): Loaded chatbot config; its active_model entry is used.
+
+    Returns:
+        LLMProvider: A provider ready to send prompts to the active model.
+
+    Raises:
+        ValueError: If the active model needs an API key and its env var is not set.
     """
-    framework_choices = ["gemini","huggingface"]
-    llm_framework = config.llm_framework.lower()
-    if llm_framework not in ["gemini","huggingface"]:
-        raise ValueError(f"llm_framework must be one of {framework_choices}, got {llm_framework}")
-    
-    model_choices = config.model_choices  # these are validated in each LLMProvider class's __init__
-    if llm_framework == "gemini":
-        provider = GeminiProvider(model_choices, max_output_tokens=config.max_output_tokens)
-        return provider, None
+    llm = config.llm
+    if llm.api_key_env:
+        # Read os.environ directly: pydantic reading .env doesn't populate os.environ,
+        # so the key must come from the real environment (docker --env-file, Cloud Run, etc.).
+        api_key = os.environ.get(llm.api_key_env)
+        if not api_key:
+            raise ValueError(
+                f"{llm.api_key_env} is not set, but model '{config.active_model}' needs it"
+            )
     else:
-        provider = HuggingFaceProvider(model_choices[0], max_output_tokens=config.max_output_tokens)
-        return provider, provider.tokenizer
+        api_key = "ollama"
+
+    return OpenAIProvider(
+        base_url=llm.base_url,
+        api_key=api_key,
+        models=[llm.model, *llm.fallback],
+        context_window=llm.context_window,
+        max_output_tokens=llm.max_output_tokens,
+        temperature=llm.temperature,
+        timeout=llm.timeout,
+        json_mode=llm.json_mode,
+    )

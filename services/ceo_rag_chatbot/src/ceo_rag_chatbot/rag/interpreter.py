@@ -99,7 +99,7 @@ class QuestionInterpreter:
                 # while this would be smart to do, cannot seem to set a safe upper token limit that does not cut off generated interpretation reponses especially when input prmprt is larger (long convos/questions)
                 # "max_output_tokens":1024, # Optimized for JSON output - 
                 "temperature":0.1, # deterministic
-                "response_mime_type": "application/json" # ensure response is parseable JSON
+                "json_output": True # use JSON mode if the model supports it (json_mode in rag_config.yml)
                 } 
             response = self.llm.generate(
                 prompt,
@@ -201,8 +201,8 @@ class QuestionInterpreter:
         except:
             # go down complex string parsing rabbit hole to try to create parseable json
             # I had an LLM write this and I don't put much faith in it.
-            # this was actually a solution to the 'unparseable response' problem I had to a HuggingFace model 
-            # Gemini models return parseable json without issue.
+            # Originally written for a Hugging Face model that often returned unparseable JSON.
+            # Models with json_mode: true in rag_config.yml are asked for plain JSON, so they should rarely reach this.
             logging.warning("Warning: could not load LLM response as json, attempting to parse")
             try:
                 json_candidates = []

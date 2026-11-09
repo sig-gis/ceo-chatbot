@@ -3,7 +3,9 @@ import chainlit as cl
 import httpx
 
 SERVER_URL = "http://localhost:8080"
-TIMEOUT = 30
+# Seconds to wait for each /chat answer. Local models are much slower than
+# hosted ones (two LLM calls per question), so this is generous.
+TIMEOUT = 120
 
 @cl.set_starters
 async def set_starters():
@@ -81,7 +83,24 @@ async def message(message: cl.Message):
         None.
     """
     # Call the tool
-    response = await send_message(message.content)
+    try:
+        response = await send_message(message.content)
+    except httpx.TimeoutException:
+        await cl.Message(
+            content=f"The chatbot did not answer within {TIMEOUT} seconds. "
+                    "Try again, or raise TIMEOUT in demo.py."
+        ).send()
+        return
+
+    if response.status_code != 200:
+        # Show the server's own message, e.g. 503 "The local model is not ready yet
+        # (state: downloaded)...". FastAPI errors are JSON with a "detail" field;
+        # fall back to the raw text for anything else.
+        is_json = response.headers.get("content-type", "").startswith("application/json")
+        detail = response.json().get("detail") if is_json else response.text
+        await cl.Message(content=f"The chatbot could not answer: {detail}").send()
+        return
+
     response_content = response.json()
     _update_history(message.content, response_content["answer"])
     await cl.Message(content=response_content["answer"]).send()

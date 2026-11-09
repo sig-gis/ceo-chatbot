@@ -15,13 +15,13 @@ dependencies = [
     "torch",
     "sentence-transformers>=5.1.2",
     "faiss-cpu",
-    "transformers",
     "fastapi[standard]",
-    "google-genai",
     "ceo_chatbot_core",
     "langchain-community",
     "langchain-core",
-    "langchain-huggingface"
+    "langchain-huggingface",
+    "openai>=3.46.0",
+    "httpx>=0.28.1",
 ]
 
 [tool.uv.sources]
