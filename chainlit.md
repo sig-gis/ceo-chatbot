@@ -11,7 +11,7 @@ Ask questions about [Collect Earth Online](https://collect-earth-online.org) and
 
 ## How it works
 
-Your question is matched against the CEO documentation using a semantic search index. The most relevant sections are retrieved and passed to Gemini, which writes a concise answer with links back to the source pages.
+Your question is matched against the CEO documentation using a semantic search index. The most relevant sections are retrieved and passed to a language model, which writes a concise answer with links back to the source pages.
 
 ## Notes
 

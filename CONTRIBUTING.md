@@ -75,11 +75,12 @@ Currently the architecture is a basic RAG pipeline with a two-phase reasoning se
 ![placeholder-diagram]
 
 ## Vector DB
-- FAISS running on application machine
-- two steps required to setup FAISS database, see the README
-- at least the second step [`build_index.py`](scripts/build_index.py) will need to occur in the application machine at run-time
+- FAISS index, built by the pipeline service (`uv run build-index`, in `services/ceo_build_index`) and uploaded to GCS
+- two steps required to set up the FAISS database (`ingest-docs`, then `build-index`), see the README
+- the chatbot downloads the index from GCS when it starts
 
 ## LLMs
-- We use Gemini models as reader and interpreter LLMs
-- a Gemini API key exists in the cloud project for the chatbot
-- this key will need to be given to the application machine at run-time
+- the same model answers both phases (interpreting the question and writing the answer)
+- the model is chosen with `llm.active_model` in `conf/base/rag_config.yml`; every model is reached through an OpenAI-compatible API (`services/ceo_rag_chatbot/src/ceo_rag_chatbot/rag/llm.py`)
+- hosted models need the API key named by their `api_key_env`, given to the chatbot as an environment variable at run-time
+- the `local` model runs on your own GPU with Ollama (`services/ceo_inference`) and needs no key, see the README
