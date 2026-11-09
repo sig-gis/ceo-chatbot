@@ -30,6 +30,7 @@ llm:
       api_key_env: ANTHROPIC_API_KEY
       context_window: 1000000
       max_output_tokens: 8192
+      temperature: null        # Anthropic rejects temperature (Claude 4.7+); omit it
     openai:
       base_url: https://api.openai.com/v1
       model: gpt-6.1-sol

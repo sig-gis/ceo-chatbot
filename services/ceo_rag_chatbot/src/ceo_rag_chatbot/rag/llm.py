@@ -14,7 +14,7 @@
 import logging
 import os
 from abc import ABC, abstractmethod
-from typing import Dict, Iterable, List, Union
+from typing import Dict, Iterable, List, Optional, Union
 from openai import OpenAI
 
 from ceo_rag_chatbot.config import ChatbotConfig
@@ -89,7 +89,7 @@ class OpenAIProvider(LLMProvider):
     in order and re-raises the last error if all of them fail.
     """
     def __init__(self, base_url: str, api_key: str, models: List[str], context_window: int,
-                 max_output_tokens: int = 8192, temperature: float = 0.2, timeout: float = 60,
+                 max_output_tokens: int = 8192, temperature: Optional[float] = 0.2, timeout: float = 60,
                  json_mode: bool = False):
         """
         Create an OpenAI SDK client pointed at the given server.
@@ -102,7 +102,8 @@ class OpenAIProvider(LLMProvider):
             models (List[str]): Model names to try, primary first, then fallbacks.
             context_window (int): Largest prompt plus answer size the model accepts, in tokens.
             max_output_tokens (int): Default cap on answer length, in tokens.
-            temperature (float): Default randomness of answers (lower is more predictable).
+            temperature (Optional[float]): Default randomness of answers. None omits
+                the temperature parameter, for providers (e.g. Anthropic) that reject it.
             timeout (float): Seconds to wait for a response before giving up.
             json_mode (bool): True if the server supports response_format json_object.
                 Only then is a json_output=True request sent in JSON mode.
@@ -152,6 +153,12 @@ class OpenAIProvider(LLMProvider):
             # reject json_object with a 400 error.
             extra["response_format"] = {"type": "json_object"}
 
+        # temperature is only sent when the model config sets one. When the
+        # config sets temperature: null (e.g. Anthropic, whose models reject
+        # any temperature below 1), never send it
+        if self.temperature is not None:
+            extra["temperature"] = kwargs.get("temperature", self.temperature)
+
         last_exception = None
         for model in self.models:
             try:
@@ -159,7 +166,6 @@ class OpenAIProvider(LLMProvider):
                     model=model,
                     messages=messages,
                     max_tokens=kwargs.get("max_output_tokens", self.max_output_tokens),
-                    temperature=kwargs.get("temperature", self.temperature),
                     stream=stream,
                     **extra,
                 )

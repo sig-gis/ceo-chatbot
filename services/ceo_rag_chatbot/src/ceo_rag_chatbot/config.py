@@ -12,7 +12,7 @@ class ModelConfig(BaseModel):
     api_key_env: Optional[str] = None  # name of the env var holding the key; None for keyless servers (Ollama)
     context_window: int
     max_output_tokens: int = 8192
-    temperature: float = 0.2
+    temperature: Optional[float] = 0.2  # None = do not send temperature (Anthropic rejects it)
     timeout: float = 60
     fallback: List[str] = []  # extra model names tried in order on the same base_url and key
     probe: bool = False  # check local server readiness at startup

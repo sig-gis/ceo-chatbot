@@ -23,6 +23,13 @@ MODELS = {
         "context_window": 131072,
         "probe": True,
     },
+    "anthropic": {
+        "base_url": "https://api.anthropic.com/v1/",
+        "model": "claude-sonnet-5-5",
+        "api_key_env": "TEST_ANTHROPIC_KEY",
+        "context_window": 1000000,
+        "temperature": None,
+    },
 }
 
 
@@ -58,6 +65,13 @@ def test_keyless_local_model_builds_without_a_key():
     with patch("ceo_rag_chatbot.rag.llm.OpenAI"):
         provider = get_reader_llm(_config("local"))
     assert provider.models == ["llama3.1:8b-instruct-q4_K_M"]
+
+
+def test_null_temperature_loads_as_none(monkeypatch):
+    monkeypatch.setenv("TEST_ANTHROPIC_KEY", "secret")
+    with patch("ceo_rag_chatbot.rag.llm.OpenAI"):
+        provider = get_reader_llm(_config("anthropic"))
+    assert provider.temperature is None
 
 
 def test_repo_rag_config_loads():

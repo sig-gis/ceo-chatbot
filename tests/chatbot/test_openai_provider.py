@@ -83,3 +83,19 @@ def test_message_list_is_sent_as_given(client):
     ]
     _provider().generate(messages)
     assert client.chat.completions.create.call_args.kwargs["messages"] == messages
+
+
+def test_temperature_omitted_when_configured_null(client):
+    client.chat.completions.create.return_value = _completion("ok")
+    provider = OpenAIProvider(base_url="http://example/v1", api_key="k", models=["m"],
+                              context_window=1000, temperature=None)
+    provider.generate("hi", temperature=0.1)
+    assert "temperature" not in client.chat.completions.create.call_args.kwargs
+
+
+def test_temperature_override_is_sent_when_configured(client):
+    client.chat.completions.create.return_value = _completion("ok")
+    provider = OpenAIProvider(base_url="http://example/v1", api_key="k", models=["m"],
+                              context_window=1000, temperature=0.2)
+    provider.generate("hi", temperature=0.1)
+    assert client.chat.completions.create.call_args.kwargs["temperature"] == 0.1
