@@ -50,7 +50,9 @@ def test_single_turn_scenario():
         interpretation, history, 20, 5
     )
 
-    all_urls = re.findall(r'https?://\S+', prompt)    
+    # The prompt is a list of chat messages; search the text of all of them.
+    prompt_text = "\n".join(msg["content"] for msg in prompt)
+    all_urls = re.findall(r'https?://\S+', prompt_text)
     
     assert [doc.metadata.get('url') for doc in docs], "URLs not in doc metadata"
     assert len(all_urls) >0, "No valid URLs provided in prompt"

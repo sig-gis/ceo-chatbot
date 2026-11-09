@@ -63,3 +63,23 @@ def test_json_output_ignored_when_model_does_not_support_it(client):
     client.chat.completions.create.return_value = _completion("{}")
     _provider().generate("hi", json_output=True)
     assert "response_format" not in client.chat.completions.create.call_args.kwargs
+
+
+def test_string_prompt_is_sent_as_one_user_message(client):
+    client.chat.completions.create.return_value = _completion("ok")
+    _provider().generate("hi")
+    assert client.chat.completions.create.call_args.kwargs["messages"] == [
+        {"role": "user", "content": "hi"}
+    ]
+
+
+def test_message_list_is_sent_as_given(client):
+    client.chat.completions.create.return_value = _completion("ok")
+    messages = [
+        {"role": "system", "content": "rules"},
+        {"role": "user", "content": "q1"},
+        {"role": "assistant", "content": "a1"},
+        {"role": "user", "content": "q2"},
+    ]
+    _provider().generate(messages)
+    assert client.chat.completions.create.call_args.kwargs["messages"] == messages

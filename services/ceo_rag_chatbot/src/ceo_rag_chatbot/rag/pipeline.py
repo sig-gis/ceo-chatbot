@@ -15,7 +15,7 @@ from pathlib import Path
 import logging
 from langchain_core.documents import Document as LangchainDocument
 from ceo_rag_chatbot.config import load_chatbot_config, load_prompt_template
-from ceo_rag_chatbot.rag.llm import get_reader_llm, LLMProvider
+from ceo_rag_chatbot.rag.llm import get_reader_llm, LLMProvider, Prompt
 from ceo_rag_chatbot.rag.retriever import load_faiss_index, get_retriever
 from ceo_rag_chatbot.rag.interpreter import QuestionInterpreter, Interpretation
 
@@ -101,35 +101,26 @@ class RagService:
         # Initialize question interpreter for two-phase reasoning
         self.interpreter = QuestionInterpreter(self.llm, self.config.prompt_file)
 
-    def _count_tokens(self, text: str) -> int:
+    def _count_tokens(self, prompt: Prompt) -> int:
         """
-        Counts the number of tokens in the given text using the LLM provider.
+        Counts the number of tokens in a text or a list of chat messages using the LLM provider.
 
         details:
             Uses the provider's count_tokens method.
             Essential for estimating prompt lengths to prevent exceeding model context limits.
+            For a message list, counts each message's content and adds them up. The few
+            tokens the server adds per message for its chat format are not counted, so
+            keep some headroom in context_window.
 
         Args:
-            text (str): The text string to tokenize and count.
+            prompt (Prompt): A text string, or a list of {"role", "content"} message dicts.
 
         Returns:
-            int: Number of tokens in the text.
+            int: Number of tokens.
         """
-        return self.llm.count_tokens(text)
-
-    def _apply_template(self, messages: List[Dict[str, str]]) -> str:
-        """
-        Joins messages into one plain-text prompt ("ROLE: content" blocks).
-
-        The model server applies the model's own chat format on its side.
-        """
-        prompt = ""
-        for msg in messages:
-            role = msg["role"].upper()
-            content = msg["content"]
-            prompt += f"{role}: {content}\n\n"
-        prompt += "ASSISTANT: "
-        return prompt
+        if isinstance(prompt, str):
+            return self.llm.count_tokens(prompt)
+        return sum(self.llm.count_tokens(msg["content"]) for msg in prompt)
 
     def _truncate_history(
         self,
@@ -164,11 +155,10 @@ class RagService:
 
         # Count tokens for fixed parts (system + user) in a single call
         # This is the min number of tokens
-        base_prompt = self._apply_template([
+        base_tokens = self._count_tokens([
             base_system_message,
             {"role": "user", "content": user_content}
         ])
-        base_tokens = self._count_tokens(base_prompt)
 
         if base_tokens >= self.max_context_tokens:
             return []
@@ -176,10 +166,7 @@ class RagService:
         budget = self.max_context_tokens - base_tokens
 
         # Count tokens per history message individually (each is a small input)
-        msg_tokens = [
-            self._count_tokens(f"{msg['role'].upper()}: {msg['content']}\n\n")
-            for msg in history
-        ]
+        msg_tokens = [self._count_tokens(msg["content"]) for msg in history]
 
         # If there are tokens left in the budget, just return history
         if sum(msg_tokens) <= budget:
@@ -266,7 +253,7 @@ class RagService:
         history: List[Dict[str, str]],
         num_retrieved_docs: int,
         num_docs_final: int
-    ) -> Tuple[str, List[LangchainDocument], str, List[Dict[str, str]]]:
+    ) -> Tuple[List[Dict[str, str]], List[LangchainDocument], str, List[Dict[str, str]]]:
         """
         Build prompt and retrieve documents for retrieval-based responses.
         
@@ -283,8 +270,8 @@ class RagService:
             num_docs_final (int): Number of top documents to include in the final context.
 
         Returns:
-            Tuple[str, List[LangchainDocument], str, List[Dict[str, str]]]: 
-                - prompt: The formatted prompt string
+            Tuple[List[Dict[str, str]], List[LangchainDocument], str, List[Dict[str, str]]]:
+                - prompt: Chat messages (system, history, user) to send to the LLM
                 - docs: Retrieved documents
                 - context: Built context string  
                 - truncated_history: History after truncation
@@ -320,15 +307,15 @@ class RagService:
             {"role": "user", "content": user_content}
         ]
 
-        # 5. Apply chat template to get final prompt
-        prompt = self._apply_template(messages)
-        return prompt, docs, context, truncated_history
+        # 5. Send the messages as separate chat roles; the model server applies
+        # the model's own chat format.
+        return messages, docs, context, truncated_history
 
     def _build_prompt_from_history(
         self,
         interpretation: Interpretation,
         history: List[Dict[str, str]]
-    ) -> str:
+    ) -> List[Dict[str, str]]:
         """
         Build a prompt for history-based responses without document retrieval.
 
@@ -342,7 +329,7 @@ class RagService:
             history: Previous conversation turns as a list of role/content dicts.
 
         Returns:
-            Formatted prompt string ready to pass to the LLM.
+            Chat messages (system, history, user) ready to pass to the LLM.
         """
         question = interpretation.interpreted_question
 
@@ -363,12 +350,11 @@ class RagService:
         else:
             user_content = self.singleturn_messages_no_retr[1]["content"].format(question=question)
 
-        messages = [base_system] + truncated_history + [{"role": "user", "content": user_content}]
-        return self._apply_template(messages)
+        return [base_system] + truncated_history + [{"role": "user", "content": user_content}]
 
     def _standard_generation(
         self,
-        prompt: str
+        prompt: Prompt
     ) -> str:
         """
         Generate answer using standard (non-streaming) LLM generation.
@@ -379,7 +365,7 @@ class RagService:
             mechanism used.
 
         Args:
-            prompt (str): The formatted prompt string to generate from.
+            prompt (Prompt): The chat messages (or prompt string) to generate from.
 
         Returns:
             str: Generated answer string.
@@ -388,7 +374,7 @@ class RagService:
 
     def _stream_generation(
         self,
-        prompt: str
+        prompt: Prompt
     ) -> Iterable[str]:
         """
         Generate answer using streaming LLM generation.
@@ -399,7 +385,7 @@ class RagService:
             mechanism used.
 
         Args:
-            prompt (str): The formatted prompt string to generate from.
+            prompt (Prompt): The chat messages (or prompt string) to generate from.
 
         Returns:
             Iterable[str]: Generator yielding answer chunks.

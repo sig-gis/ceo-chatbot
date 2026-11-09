@@ -14,22 +14,26 @@
 import logging
 import os
 from abc import ABC, abstractmethod
-from typing import Iterable, List
+from typing import Dict, Iterable, List, Union
 from openai import OpenAI
 
 from ceo_rag_chatbot.config import ChatbotConfig
+
+# A prompt is either one string (sent as a single user message) or a list of
+# chat messages like {"role": "system" | "user" | "assistant", "content": "..."}.
+Prompt = Union[str, List[Dict[str, str]]]
 
 
 
 class LLMProvider(ABC):
     """Base class for LLM providers. Every provider must implement all four members."""
     @abstractmethod
-    def generate(self, prompt: str, **kwargs) -> str:
+    def generate(self, prompt: Prompt, **kwargs) -> str:
         """
         Send a prompt to the model and return the full answer.
 
         Args:
-            prompt (str): The complete prompt text to send.
+            prompt (Prompt): One prompt string, or a list of chat messages sent as given.
             **kwargs: Optional per-call overrides, such as max_output_tokens or temperature.
 
         Returns:
@@ -38,12 +42,12 @@ class LLMProvider(ABC):
         pass
 
     @abstractmethod
-    def stream(self, prompt: str, **kwargs) -> Iterable[str]:
+    def stream(self, prompt: Prompt, **kwargs) -> Iterable[str]:
         """
         Send a prompt to the model and return the answer in pieces.
 
         Args:
-            prompt (str): The complete prompt text to send.
+            prompt (Prompt): One prompt string, or a list of chat messages sent as given.
             **kwargs: Optional per-call overrides, such as max_output_tokens or temperature.
 
         Returns:
@@ -110,12 +114,14 @@ class OpenAIProvider(LLMProvider):
         self.temperature = temperature
         self.json_mode = json_mode
 
-    def _inference_with_fallback(self, prompt: str, stream: bool, **kwargs):
+    def _inference_with_fallback(self, prompt: Prompt, stream: bool, **kwargs):
         """
         Send the prompt to each model in turn until one succeeds.
 
         details:
-            The prompt is sent as a single user message. For streaming, the whole
+            A string prompt is sent as a single user message; a message list is
+            sent as given, so the server applies the model's own chat format.
+            For streaming, the whole
             answer is collected before returning, so a model that fails halfway
             falls back cleanly instead of returning a partial answer.
             json_output=True asks for JSON mode, which makes the model return
@@ -124,7 +130,7 @@ class OpenAIProvider(LLMProvider):
             Unknown kwargs are ignored on purpose.
 
         Args:
-            prompt (str): The complete prompt text to send.
+            prompt (Prompt): One prompt string, or a list of chat messages sent as given.
             stream (bool): True to use the streaming API, False for a single response.
             **kwargs: Optional overrides: max_output_tokens, temperature, json_output.
 
@@ -135,6 +141,11 @@ class OpenAIProvider(LLMProvider):
         Raises:
             Exception: The last model's error, if every model fails.
         """
+        if isinstance(prompt, str):
+            messages = [{"role": "user", "content": prompt}]
+        else:
+            messages = prompt
+
         extra = {}
         if kwargs.get("json_output") and self.json_mode:
             # Only add response_format when supported: some servers (e.g. Anthropic)
@@ -146,7 +157,7 @@ class OpenAIProvider(LLMProvider):
             try:
                 response = self.client.chat.completions.create(
                     model=model,
-                    messages=[{"role": "user", "content": prompt}],
+                    messages=messages,
                     max_tokens=kwargs.get("max_output_tokens", self.max_output_tokens),
                     temperature=kwargs.get("temperature", self.temperature),
                     stream=stream,
@@ -162,12 +173,12 @@ class OpenAIProvider(LLMProvider):
                 last_exception = e
         raise last_exception
 
-    def generate(self, prompt: str, **kwargs) -> str:
+    def generate(self, prompt: Prompt, **kwargs) -> str:
         """
         Send a prompt and return the full answer, trying fallback models on failure.
 
         Args:
-            prompt (str): The complete prompt text to send.
+            prompt (Prompt): One prompt string, or a list of chat messages sent as given.
             **kwargs: Optional overrides: max_output_tokens, temperature, json_output.
 
         Returns:
@@ -178,7 +189,7 @@ class OpenAIProvider(LLMProvider):
         """
         return self._inference_with_fallback(prompt, stream=False, **kwargs)
 
-    def stream(self, prompt: str, **kwargs) -> Iterable[str]:
+    def stream(self, prompt: Prompt, **kwargs) -> Iterable[str]:
         """
         Send a prompt and yield the answer in pieces, trying fallback models on failure.
 
@@ -186,7 +197,7 @@ class OpenAIProvider(LLMProvider):
         _inference_with_fallback), so callers never get a partial answer.
 
         Args:
-            prompt (str): The complete prompt text to send.
+            prompt (Prompt): One prompt string, or a list of chat messages sent as given.
             **kwargs: Optional overrides: max_output_tokens, temperature, json_output.
 
         Yields:
