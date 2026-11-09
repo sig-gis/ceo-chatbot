@@ -86,10 +86,12 @@ def load_chatbot_config(
     )
 
 class ChatbotSettings(BaseSettings):
-    """Env vars required for inference only (chatbot service).
+    """Env vars the chatbot service reads through pydantic.
 
-    Kept separate from AppSettings so the chatbot container does not need
-    pipeline-specific variables (DB_BUCKET, DOCS_BUCKET, PREFIX, HF_TOKEN).
+    Holds only what the chatbot needs, so the chatbot container does not need
+    pipeline-only variables (DOCS_BUCKET, PREFIX). HF_TOKEN and the LLM API key
+    are not fields here: they are read from os.environ directly (see
+    get_reader_llm), because pydantic reading .env does not populate os.environ.
     """
     # GCP project ID. storage.Client() requires this; it cannot be inferred
     # from user ADC credentials (only service-account keys embed a project).

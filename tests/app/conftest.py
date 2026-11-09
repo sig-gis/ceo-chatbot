@@ -65,7 +65,7 @@ def mock_rag():
     """Create a fake RagService for use in tests.
 
     RagService is the class that wraps the LLM + retriever pipeline. In
-    production it loads a FAISS index and calls the Gemini API. Here we
+    production it loads a FAISS index and calls the configured LLM. Here we
     replace it with a MagicMock so tests run instantly with no network calls.
 
     Pre-configured return value

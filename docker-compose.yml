@@ -109,8 +109,8 @@ services:
       - "./conf:/app/conf:ro"
       # Reuse the host's HuggingFace cache so the embedding model is downloaded once.
       - "${HOME}/.cache/huggingface:/root/.cache/huggingface"
-      # Uncomment to reuse a locally cached FAISS index and skip the GCS download
-      # on startup:
+      # Uncomment to keep the downloaded FAISS index in ./data on the host. The
+      # chatbot still downloads the index from GCS on every start.
       # - "./data:/app/data"
     environment:
       GOOGLE_APPLICATION_CREDENTIALS: /gcp/adc.json

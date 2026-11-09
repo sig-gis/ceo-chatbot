@@ -201,8 +201,8 @@ class QuestionInterpreter:
         except:
             # go down complex string parsing rabbit hole to try to create parseable json
             # I had an LLM write this and I don't put much faith in it.
-            # this was actually a solution to the 'unparseable response' problem I had to a HuggingFace model 
-            # Gemini models return parseable json without issue.
+            # Originally written for a Hugging Face model that often returned unparseable JSON.
+            # Models with json_mode: true in rag_config.yml are asked for plain JSON, so they should rarely reach this.
             logging.warning("Warning: could not load LLM response as json, attempting to parse")
             try:
                 json_candidates = []
